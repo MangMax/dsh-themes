@@ -523,18 +523,6 @@ export default {
         ),
 
         React.createElement('div', { className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
-          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, null)))
-        ),
-
-        store.custom.length > 0
-          ? React.createElement('div', { className: 'dsth-section' },
-              React.createElement('div', { className: 'dsth-section-title' }, '导入的主题'),
-              renderCustomGrid
-            )
-          : null,
-
-        React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '搜索安装(Open VSX)'),
           React.createElement('div', { className: 'dsth-row' },
             React.createElement('input', {
@@ -547,7 +535,6 @@ export default {
               busy === 'search' ? '搜索中…' : '搜索'
             )
           ),
-          React.createElement('div', { className: 'dsth-sub' }, '点击「导入」一步完成下载、解析与聚合导入;重复导入走缓存,秒开。'),
           searchResults && searchResults.length > 0
             ? React.createElement('div', { className: 'dsth-list' },
                 searchResults.map((ext) => {
@@ -603,6 +590,18 @@ export default {
               )
             : null
         ),
+
+        React.createElement('div', { className: 'dsth-section' },
+          React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
+          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, null)))
+        ),
+
+        store.custom.length > 0
+          ? React.createElement('div', { className: 'dsth-section' },
+              React.createElement('div', { className: 'dsth-section-title' }, '导入的主题'),
+              renderCustomGrid
+            )
+          : null,
 
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '从 VS Code 导入'),
