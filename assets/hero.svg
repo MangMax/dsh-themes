@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="420" viewBox="0 0 1200 420" role="img" aria-labelledby="title desc">
+  <title id="title">dsh-themes</title>
+  <desc id="desc">Themes for DeepSeek Harness — light and dark variants, theme library, VS Code imports, and Open VSX discovery.</desc>
+
+  <defs>
+    <linearGradient id="bgGlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.96"/>
+      <stop offset="0.58" stop-color="#F8FAFF" stop-opacity="0.90"/>
+      <stop offset="1" stop-color="#F4F7FF" stop-opacity="0.98"/>
+    </linearGradient>
+    <radialGradient id="cornerGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1040 66) rotate(132) scale(330 250)">
+      <stop offset="0" stop-color="#E9EDFF" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#E9EDFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="whaleBase" x1="2" y1="42" x2="49" y2="7" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#36C5F0"/>
+      <stop offset="0.34" stop-color="#4D6BFE"/>
+      <stop offset="0.68" stop-color="#6D5DFB"/>
+      <stop offset="1" stop-color="#9B6AF3"/>
+    </linearGradient>
+    <linearGradient id="whaleSheen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.50"/>
+      <stop offset="0.42" stop-color="#FFFFFF" stop-opacity="0.06"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="titleAccent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4D6BFE"/>
+      <stop offset="0.55" stop-color="#6D5DFB"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="8" stdDeviation="14" flood-color="#26376D" flood-opacity="0.08"/>
+    </filter>
+    <filter id="logoShadow" x="-50%" y="-50%" width="200%" height="220%">
+      <feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#526FFF" flood-opacity="0.16"/>
+    </filter>
+
+    <!-- DeepSeek whale silhouette, preserved from the official vector geometry. -->
+    <path id="deepseekWhale" d="M48.8354 10.0479C48.3232 9.79199 48.1025 10.2798 47.8032 10.5278C47.7007 10.6079 47.6143 10.7119 47.5273 10.8076C46.7793 11.624 45.9048 12.1597 44.7622 12.0957C43.0923 12 41.666 12.5356 40.4058 13.8398C40.1377 12.2319 39.2476 11.272 37.8926 10.6558C37.1836 10.3359 36.4668 10.0156 35.9702 9.31982C35.6235 8.82373 35.5293 8.27197 35.356 7.72754C35.2456 7.3999 35.1353 7.06396 34.7651 7.00781C34.3633 6.94385 34.2056 7.2876 34.0479 7.57568C33.418 8.75195 33.1733 10.0479 33.1973 11.3599C33.2524 14.312 34.4736 16.6641 36.8999 18.3359C37.1758 18.5278 37.2466 18.7197 37.1597 19C36.9946 19.5757 36.7974 20.1357 36.624 20.7119C36.5137 21.0801 36.3486 21.1597 35.9624 21C34.6309 20.4321 33.481 19.5918 32.4644 18.5757C30.7393 16.8721 29.1792 14.9917 27.2334 13.52C26.7764 13.1758 26.3193 12.856 25.8467 12.5518C23.8618 10.584 26.1069 8.96777 26.627 8.77588C27.1704 8.57568 26.8159 7.8877 25.0591 7.896C23.3022 7.90381 21.6953 8.50391 19.647 9.30371C19.3477 9.42383 19.0322 9.51172 18.7095 9.58398C16.8501 9.22363 14.9199 9.14355 12.9033 9.37598C9.10596 9.80762 6.07275 11.6396 3.84326 14.7681C1.16455 18.5278 0.53418 22.7998 1.30664 27.2559C2.11768 31.9521 4.46582 35.8398 8.07373 38.8799C11.8159 42.0322 16.1255 43.5762 21.041 43.2803C24.0269 43.104 27.3516 42.6963 31.1016 39.4561C32.0469 39.936 33.0396 40.1279 34.686 40.272C35.9546 40.3921 37.1758 40.208 38.1211 40.0078C39.6021 39.688 39.4995 38.2881 38.9639 38.0322C34.623 35.9678 35.5762 36.8081 34.71 36.1279C36.9155 33.4639 40.2402 30.6958 41.54 21.728C41.6426 21.0161 41.5557 20.5679 41.54 19.9917C41.5322 19.6396 41.6108 19.5039 42.0049 19.4639C43.0923 19.3359 44.1479 19.0317 45.1167 18.4878C47.9292 16.9199 49.064 14.3438 49.3315 11.2559C49.3711 10.7837 49.3237 10.2959 48.8354 10.0479ZM24.3262 37.8398C20.1196 34.4639 18.0791 33.3521 17.2358 33.3999C16.4482 33.4482 16.5898 34.3682 16.7632 34.9678C16.9443 35.5601 17.1812 35.9683 17.5117 36.4878C17.7402 36.832 17.8979 37.3442 17.2832 37.728C15.9282 38.584 13.5728 37.4399 13.4624 37.3838C10.7207 35.7358 8.42822 33.5601 6.81348 30.584C5.25342 27.7197 4.34766 24.6479 4.19775 21.3677C4.1582 20.5757 4.38672 20.2959 5.15869 20.1519C6.17529 19.96 7.22314 19.9199 8.23926 20.0718C12.5327 20.7119 16.1885 22.6719 19.2529 25.7759C21.002 27.5439 22.3252 29.6558 23.6885 31.7202C25.1377 33.9121 26.6978 36 28.6831 37.7119C29.3843 38.312 29.9434 38.7681 30.479 39.104C28.8643 39.2881 26.1699 39.3281 24.3262 37.8398ZM26.3433 24.6001C26.3433 24.248 26.6191 23.9678 26.9658 23.9678C27.0444 23.9678 27.1152 23.9839 27.1782 24.0078C27.2651 24.04 27.3438 24.0879 27.4067 24.1602C27.5171 24.272 27.5801 24.4321 27.5801 24.6001C27.5801 24.9521 27.3042 25.2319 26.9575 25.2319C26.6108 25.2319 26.3433 24.9521 26.3433 24.6001ZM32.6064 27.8799C32.2046 28.0479 31.8027 28.1919 31.4165 28.208C30.8179 28.2397 30.1641 27.9922 29.8096 27.688C29.2583 27.2158 28.8643 26.9521 28.6987 26.1279C28.6279 25.7759 28.6675 25.2319 28.7305 24.9199C28.8721 24.248 28.7144 23.8159 28.2495 23.4238C27.8716 23.104 27.3911 23.0161 26.8633 23.0161C26.666 23.0161 26.4849 22.9277 26.3511 22.856C26.1304 22.7441 25.9492 22.4639 26.1226 22.1201C26.1777 22.0078 26.4458 21.7358 26.5088 21.688C27.2256 21.272 28.0527 21.4077 28.8169 21.7197C29.5259 22.0161 30.0615 22.5601 30.834 23.3281C31.6216 24.2559 31.7632 24.5117 32.2124 25.208C32.5669 25.752 32.8901 26.312 33.1104 26.9521C33.2446 27.3521 33.0713 27.6802 32.6064 27.8799Z"/>
+    <clipPath id="whaleClip">
+      <use href="#deepseekWhale" fill-rule="evenodd" clip-rule="evenodd"/>
+    </clipPath>
+  </defs>
+
+  <!-- Card background: same clean visual language as the reference hero. -->
+  <rect width="1200" height="420" rx="28" fill="url(#bgGlow)"/>
+  <rect width="1200" height="420" rx="28" fill="url(#cornerGlow)"/>
+  <rect x="1" y="1" width="1198" height="418" rx="27" fill="none" stroke="#DDE4FF"/>
+
+  <!-- Multicolor layered DeepSeek whale: exact silhouette, theme-spectrum treatment. -->
+  <g transform="translate(72 62) scale(1.62)" filter="url(#logoShadow)">
+    <use href="#deepseekWhale" fill="url(#whaleBase)"/>
+    <g clip-path="url(#whaleClip)">
+      <ellipse cx="12" cy="32" rx="22" ry="18" fill="#22D3EE" opacity="0.34"/>
+      <ellipse cx="29" cy="14" rx="24" ry="13" fill="#60A5FA" opacity="0.30"/>
+      <ellipse cx="44" cy="13" rx="17" ry="19" fill="#A78BFA" opacity="0.36"/>
+      <path d="M-5 41 C10 28, 24 32, 37 21 C43 16, 48 13, 57 11 L58 49 L-5 49 Z" fill="#7C3AED" opacity="0.12"/>
+      <rect x="-8" y="-8" width="70" height="64" fill="url(#whaleSheen)" opacity="0.48"/>
+    </g>
+  </g>
+
+  <text x="170" y="113" fill="#111827" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="54" font-weight="720" letter-spacing="-1.4">dsh-themes</text>
+  <text x="72" y="181" fill="#526079" font-family="ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" font-size="24" font-weight="450">Themes for DeepSeek Harness. Make DSH feel like yours.</text>
+
+  <!-- Small theme spectrum signature. -->
+  <g transform="translate(72 205)">
+    <rect width="44" height="4" rx="2" fill="#4D6BFE"/>
+    <rect x="50" width="44" height="4" rx="2" fill="#8B5CF6"/>
+    <rect x="100" width="44" height="4" rx="2" fill="#22C3E6"/>
+    <rect x="150" width="44" height="4" rx="2" fill="#F2B45F"/>
+    <rect x="200" width="44" height="4" rx="2" fill="#D7DEEC"/>
+  </g>
+
+  <!-- Feature card 1 -->
+  <g transform="translate(72 244)" filter="url(#softShadow)">
+    <rect width="500" height="104" rx="18" fill="#FFFFFF" stroke="#DDE4FF"/>
+    <circle cx="52" cy="52" r="23" fill="#EEF2FF"/>
+    <!-- theme / palette icon -->
+    <path d="M41 51.5c0-7 5.6-12.5 12.7-12.5 6.2 0 11.3 4.1 11.3 9.1 0 4.1-3.2 6.9-7.1 6.9h-2.4c-1.7 0-2.7 1.4-2.4 2.8.3 1.5-.8 2.9-2.4 2.9C45.3 60.7 41 56.6 41 51.5Z" fill="none" stroke="#4D6BFE" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="48" cy="47" r="1.8" fill="#4D6BFE"/>
+    <circle cx="54" cy="44.5" r="1.8" fill="#8B5CF6"/>
+    <circle cx="60" cy="47.3" r="1.8" fill="#22C3E6"/>
+    <text x="94" y="46" fill="#172033" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-size="21" font-weight="650">Theme library</text>
+    <text x="94" y="75" fill="#667085" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-size="17">Light · Dark · System, with independent variants</text>
+    <g transform="translate(402 42)">
+      <circle cx="0" cy="10" r="7" fill="#4D6BFE"/>
+      <circle cx="18" cy="10" r="7" fill="#8B5CF6"/>
+      <circle cx="36" cy="10" r="7" fill="#22C3E6"/>
+      <circle cx="54" cy="10" r="7" fill="#F2B45F"/>
+    </g>
+  </g>
+
+  <!-- Feature card 2 -->
+  <g transform="translate(600 244)" filter="url(#softShadow)">
+    <rect width="528" height="104" rx="18" fill="#FFFFFF" stroke="#DDE4FF"/>
+    <circle cx="52" cy="52" r="23" fill="#EEF2FF"/>
+    <!-- import / discover icon -->
+    <path d="M52 38v17m0 0-6-6m6 6 6-6M42 59v3h20v-3" fill="none" stroke="#4D6BFE" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="94" y="46" fill="#172033" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-size="21" font-weight="650">Import &amp; discover</text>
+    <text x="94" y="75" fill="#667085" font-family="ui-sans-serif,system-ui,-apple-system,sans-serif" font-size="17">VS Code · Open VSX · URL · JSON</text>
+    <g transform="translate(413 33)">
+      <rect x="0" y="0" width="78" height="38" rx="10" fill="#F6F8FF" stroke="#DDE4FF"/>
+      <rect x="12" y="10" width="24" height="5" rx="2.5" fill="url(#titleAccent)"/>
+      <rect x="12" y="21" width="44" height="5" rx="2.5" fill="#DDE4FF"/>
+      <circle cx="63" cy="13" r="4" fill="#22C3E6"/>
+    </g>
+  </g>
+
+  <!-- Tiny decorative nodes, kept intentionally sparse. -->
+  <g opacity="0.75">
+    <circle cx="1090" cy="84" r="4" fill="#4D6BFE"/>
+    <circle cx="1110" cy="84" r="4" fill="#8B5CF6"/>
+    <circle cx="1130" cy="84" r="4" fill="#22C3E6"/>
+  </g>
+</svg>
