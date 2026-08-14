@@ -1,5 +1,7 @@
 # dsh-themes
 
+[English](README_EN.md) | 中文
+
 DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明 / 暗 / 跟随系统外观模式、Open VSX 搜索安装、VS Code 主题导入,主题库持久化。
 
 > 主题引擎(语义角色映射、双种子生成、对比度求解、OKLCH 感知导入映射)的架构灵感来自
@@ -18,10 +20,12 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 
 ## 开发
 
-源码为 **TypeScript 模块**,由 **VitePlus(`vp`)打包**为 DSH 插件函数体(平台要求单文件,`vite.config.ts` 的 `pack` 块负责 IIFE 构建与函数体包装)。
+源码为 **TypeScript 模块**,由 **VitePlus(`vp`)打包**为 DSH 插件函数体(`vite.config.ts` 的 `pack` 块负责构建)。
 
 ```bash
-vp pack          # 构建 dist/client/index.js 与 dist/host/index.js(即插件函数体)
+bash scripts/install.sh             # 一键:vp pack 构建 → 组装 npm 插件包 → dsh plugin 安装到 web profile
+bash scripts/install.sh --pack-only # 只构建并打包,不安装
+vp pack          # 仅构建 dist/client/index.cjs 与 dist/host/index.cjs
 vp check         # 语法检查
 ```
 
@@ -31,16 +35,49 @@ vp check         # 语法检查
 client/src/        # 浏览器半区(设置页 UI、调色板引擎)
   color-utils.ts   #   RGB/HSL/WCAG 对比度、双种子调色板
   oklch.ts         #   OKLCH 感知引擎(导入派生)
-  chat.ts          #   Chat 调色板(t3.chat 界面取色,颜色保持原样)
+  chat.ts          #   t3 chat 调色板(t3.chat 界面取色,颜色保持原样)
   vs-import.ts     #   VS Code 主题解析与映射
   palette.ts       #   token 清单、默认外观、内置主题
   styles.ts        #   设置页样式
-  index.ts         #   入口:状态/覆盖层/设置页/注册
+  index.ts         #   入口:状态/覆盖层/设置页/编辑器/注册
 host/src/          # Node 半区(RPC)
   util.ts          #   shell/curl 工具工厂
   index.ts         #   入口:扫描/读取/搜索/详情/安装/持久化
+scripts/
+  install.sh       #   一键构建 + 组装 npm 插件包 + 安装
 ```
 
 ## 安装
 
-在 DSH 中运行插件:`cordis_define` 的 `code.host`/`code.client` 分别取 `dist/host/index.js` 与 `dist/client/index.js`。
+方式一(从 npm registry,已发布后):
+
+```bash
+dsh plugin --profile web add dsh-themes
+```
+
+方式二(本地一键构建安装,适合开发迭代):
+
+```bash
+bash scripts/install.sh
+```
+
+两种方式安装后均需**重启 dsh web**,然后进入 **设置 → 主题** 使用。
+
+## 使用
+
+- **外观模式**:跟随系统 / 浅色 / 深色;主题库默认未指定时由 DSH 默认主题兜底
+- **明暗独立归属**:点击变体只设置该侧外观的主题,不切换外观模式;浅色与暗色可来自不同主题;点击卡片名称则明暗两侧同时使用该主题
+- **颜色编辑器**:主题卡片「修改」进入二级页面——改名、明暗切换、分组 token 色块与 hex 编辑(即时生效)、重置修改
+- **内置主题「复制」**:复制为自定义副本后再编辑,内置主题不可直接修改
+- **从 VS Code 导入**:扫描本地扩展(`~/.vscode/extensions`、`~/.vscode-insiders/extensions`、`~/.cursor/extensions`)、URL 获取、粘贴 JSON;导入主题可修改、删除
+- **搜索安装(Open VSX)**:搜索、查看卡片内简介与链接、一键导入(缓存秒开)
+
+## 卸载
+
+移除插件:
+
+```bash
+dsh plugin --profile web remove dsh-themes
+```
+
+或删除 profile 依赖后重启 dsh web。卸载后调色板覆盖层自动移除,外观恢复默认。

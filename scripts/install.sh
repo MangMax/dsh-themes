@@ -58,7 +58,7 @@ cat > "$BUILD_DIR/package.json" <<EOF
   "description": "DSH 外观与主题插件:内置调色板、Open VSX 搜索导入、颜色参数编辑器、明暗独立归属",
   "type": "module",
   "main": "lib/index.js",
-  "files": ["lib", "cordis.patch.yml", "README.md"],
+  "files": ["lib", "cordis.patch.yml", "README.md", "README_EN.md"],
   "license": "MIT",
   "keywords": ["dsh", "deepseek-harness", "plugin", "theme", "themes", "color", "palette", "appearance"],
   "dsh": {
@@ -71,9 +71,11 @@ cat > "$BUILD_DIR/package.json" <<EOF
 }
 EOF
 
-# 包 README
+# 包 README(中文默认 + 英文版)
 cat > "$BUILD_DIR/README.md" <<'EOF'
 # dsh-themes
+
+[English](README_EN.md) | 中文
 
 DSH(DeepSeek Harness)外观与主题插件。
 
@@ -98,6 +100,37 @@ dsh plugin --profile web add dsh-themes
 
 ```bash
 bash scripts/install.sh    # 构建 + 组装 + 安装
+```
+EOF
+
+cat > "$BUILD_DIR/README_EN.md" <<'EOF'
+# dsh-themes
+
+English | [中文](README.md)
+
+A look & theme plugin for DSH (DeepSeek Harness).
+
+## Install
+
+```bash
+dsh plugin --profile web add dsh-themes
+```
+
+Restart dsh web, then use it under **Settings → Themes**.
+
+## Features
+
+- Built-in palettes (DSH Default / t3 chat / Grove / Ocean / Ember / Iris) with independent light/dark owners; unspecified sides fall back to the default theme
+- One-click Open VSX search & import; VS Code extension / URL / paste-JSON import
+- Color editor: light/dark tabs, grouped token pickers + hex inputs with instant effect, rename and reset support
+- Persisted theme library (`~/.dsh/dsh-themes.json`)
+
+## Development
+
+Source: https://github.com/MangMax/dsh-themes
+
+```bash
+bash scripts/install.sh    # build + assemble + install
 ```
 EOF
 
