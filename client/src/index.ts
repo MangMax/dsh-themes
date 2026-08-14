@@ -136,7 +136,8 @@ export default {
     async function hydrate() {
       try {
         const res = await connection.rpc.call('/dsh-themes', 'load-themes', {})
-        const d = res && res.ok ? res.value : null
+        // load-themes 方法体返回 { ok, data },经信封包装后内容在 value.data
+        const d = res && res.ok && res.value ? res.value.data : null
         if (d) {
           if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p)).map((p) => fillPalette(p))
           // half 模型:优先恢复 mixed;旧版 current 转成双侧同值
