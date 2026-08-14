@@ -899,8 +899,8 @@ return {
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
         '.dsth-select{flex:none;min-width:150px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220%200%2012%2012%22 fill=%22none%22%3E%3Cpath d=%22M3%204.5L6%207.5L9%204.5%22 stroke=%22%2381858C%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E");background-position:right 8px center;background-repeat:no-repeat;background-size:12px 12px;padding-right:24px;cursor:pointer}' +
         '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
-        '.dsth-dots{display:flex;gap:4px;flex:none;padding-left:2px}' +
-        '.dsth-dot{width:12px;height:12px;border-radius:50%;border:1px solid var(--dsw-alias-border-l1);box-sizing:border-box}' +
+        '.dsth-ball{width:32px;height:32px;border-radius:50%;flex:none;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
+        '.dsth-ball-dark{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14),0 1px 2px rgba(0,0,0,0.18)}' +
         '.dsth-colcard{grid-column:1 / -1}' +
         '.dsth-col-list{display:flex;flex-direction:column;gap:6px}' +
         '.dsth-colitem{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}' +
@@ -1097,9 +1097,31 @@ return {
         return null
       }
 
-      const renderSwatchDots = (tokens) => React.createElement('div', { className: 'dsth-dots' },
-        SWATCH_TOKENS.map((t) => React.createElement('span', { key: t, className: 'dsth-dot', style: { background: tokens[t] } }))
-      )
+      /** 多色融合预览球(参照 t3code ThemePreviewCircle):canvas 基底 + accent/操作色对角光晕。 */
+      const renderPreviewBall = (tokens, mode) => {
+        const dark = mode === 'dark'
+        const canvas = tokens['--dsw-alias-bg-base']
+        const accent = tokens['--dsw-alias-brand-primary']
+        const action = tokens['--dsw-alias-button-info-fill']
+        const modeBase = dark
+          ? 'color-mix(in oklab, ' + canvas + ' 80%, #09090b)'
+          : 'color-mix(in oklab, ' + canvas + ' 80%, #ffffff)'
+        const accentPos = dark ? '28% 78%' : '72% 22%'
+        const actionPos = dark ? '82% 18%' : '18% 82%'
+        const fade = dark ? 62 : 72
+        const style = {
+          backgroundColor: modeBase,
+          backgroundImage: [
+            'radial-gradient(circle at ' + accentPos + ' in oklab, ' + accent + ' 0%, color-mix(in oklab, ' + accent + ' ' + fade + '%, transparent) 28%, transparent 58%)',
+            'radial-gradient(circle at ' + actionPos + ' in oklab, color-mix(in oklab, ' + action + ' 45%, transparent) 0%, transparent 55%)',
+          ].join(', '),
+        }
+        return React.createElement('span', {
+          className: 'dsth-ball' + (dark ? ' dsth-ball-dark' : ''),
+          style,
+          title: MODE_LABELS[mode],
+        })
+      }
 
       const renderCard = (palette, extra) => {
         const badge = paletteBadge(palette)
@@ -1120,6 +1142,7 @@ return {
       const renderVariantRow = (palette, mode, variants) => {
         const idx = Math.max(0, variants.findIndex((v) => v.tokens === palette[mode]))
         return React.createElement('div', { className: 'dsth-vrow' },
+          renderPreviewBall(palette[mode], mode),
           React.createElement('span', { className: 'dsth-vlabel' }, MODE_LABELS[mode]),
           React.createElement('select', {
             className: 'dsth-input dsth-select dsth-vselect',
@@ -1128,8 +1151,7 @@ return {
             title: '选择' + MODE_LABELS[mode] + '变体并应用',
           },
             variants.map((v, i) => React.createElement('option', { key: v.label + i, value: String(i) }, v.label))
-          ),
-          renderSwatchDots(palette[mode])
+          )
         )
       }
 
