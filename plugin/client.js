@@ -899,14 +899,20 @@ return {
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
         '.dsth-select{flex:none;min-width:150px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220%200%2012%2012%22 fill=%22none%22%3E%3Cpath d=%22M3%204.5L6%207.5L9%204.5%22 stroke=%22%2381858C%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E");background-position:right 8px center;background-repeat:no-repeat;background-size:12px 12px;padding-right:24px;cursor:pointer}' +
         '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
-        '.dsth-ball{width:32px;height:32px;border-radius:50%;flex:none;display:inline-block;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
+        '.dsth-ball{width:20px;height:20px;border-radius:50%;flex:none;display:inline-block;cursor:pointer;border:none;padding:0;transition:width .15s ease,height .15s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
         '.dsth-ball-dark{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14),0 1px 2px rgba(0,0,0,0.18)}' +
+        '.dsth-ball-active{width:32px;height:32px}' +
+        '.dsth-balls{display:flex;gap:6px;align-items:center;overflow-x:auto;flex:1;min-width:0;padding:2px 0;scrollbar-width:none}' +
+        '.dsth-balls::-webkit-scrollbar{display:none}' +
+        '.dsth-nav{flex:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:13px;line-height:1;display:grid;place-items:center;padding:0;font-family:inherit}' +
+        '.dsth-nav:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}' +
+        '.dsth-nav-disabled{opacity:.3;cursor:default}' +
         '.dsth-colcard{grid-column:1 / -1}' +
         '.dsth-col-list{display:flex;flex-direction:column;gap:6px}' +
         '.dsth-colitem{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}' +
         '.dsth-vrow{display:flex;gap:6px;align-items:center}' +
         '.dsth-vlabel{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;flex:none;width:28px}' +
-        '.dsth-vselect{flex:none;min-width:130px}' +
+
         '.dsth-pair{display:flex;gap:8px;align-items:center}' +
         '.dsth-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
       )
@@ -920,6 +926,76 @@ return {
 
     const SWATCH_TOKENS = ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-2', '--dsw-alias-brand-primary', '--dsw-alias-state-business-primary', '--dsw-alias-label-primary', '--dsw-specific-sidebar-fill']
     const MODE_LABELS = { system: '跟随系统', light: '浅色', dark: '深色' }
+
+    /** 明暗槽变体选择器:融合色球列表,选中放大,溢出时显示左右导航箭头,悬停显示变体名。 */
+    function VariantRow({ palette, mode, variants }) {
+      const ref = React.useRef(null)
+      const [nav, setNav] = React.useState({ left: false, right: false })
+      const updateNav = React.useCallback(() => {
+        const el = ref.current
+        if (!el) return
+        setNav({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 })
+      }, [])
+      React.useEffect(() => {
+        const el = ref.current
+        if (!el) return
+        updateNav()
+        el.addEventListener('scroll', updateNav)
+        if (typeof window !== 'undefined') window.addEventListener('resize', updateNav)
+        return () => {
+          el.removeEventListener('scroll', updateNav)
+          if (typeof window !== 'undefined') window.removeEventListener('resize', updateNav)
+        }
+      }, [updateNav, variants.length])
+      const scrollBy = (dir) => {
+        const el = ref.current
+        if (el) el.scrollBy({ left: dir * 80, behavior: 'smooth' })
+      }
+      const dark = mode === 'dark'
+      const ballStyle = (tokens) => {
+        const canvas = tokens['--dsw-alias-bg-base']
+        const accent = tokens['--dsw-alias-brand-primary']
+        const action = tokens['--dsw-alias-button-info-fill']
+        const modeBase = dark
+          ? 'color-mix(in oklab, ' + canvas + ' 80%, #09090b)'
+          : 'color-mix(in oklab, ' + canvas + ' 80%, #ffffff)'
+        const accentPos = dark ? '28% 78%' : '72% 22%'
+        const actionPos = dark ? '82% 18%' : '18% 82%'
+        const fade = dark ? 62 : 72
+        return {
+          backgroundColor: modeBase,
+          backgroundImage: [
+            'radial-gradient(circle at ' + accentPos + ' in oklab, ' + accent + ' 0%, color-mix(in oklab, ' + accent + ' ' + fade + '%, transparent) 28%, transparent 58%)',
+            'radial-gradient(circle at ' + actionPos + ' in oklab, color-mix(in oklab, ' + action + ' 45%, transparent) 0%, transparent 55%)',
+          ].join(', '),
+        }
+      }
+      const activeIdx = Math.max(0, variants.findIndex((v) => v.tokens === palette[mode]))
+      return React.createElement('div', { className: 'dsth-vrow' },
+        React.createElement('span', { className: 'dsth-vlabel' }, MODE_LABELS[mode]),
+        React.createElement('button', {
+          className: 'dsth-nav' + (nav.left ? '' : ' dsth-nav-disabled'),
+          disabled: !nav.left,
+          tabIndex: -1,
+          onClick: () => scrollBy(-1),
+        }, '\u2039'),
+        React.createElement('div', { className: 'dsth-balls', ref, onScroll: updateNav },
+          variants.map((v, i) => React.createElement('button', {
+            key: v.label + i,
+            className: 'dsth-ball' + (i === activeIdx ? ' dsth-ball-active' : '') + (dark ? ' dsth-ball-dark' : ''),
+            style: ballStyle(v.tokens),
+            title: v.label,
+            onClick: () => setVariant(palette, mode, v),
+          }))
+        ),
+        React.createElement('button', {
+          className: 'dsth-nav' + (nav.right ? '' : ' dsth-nav-disabled'),
+          disabled: !nav.right,
+          tabIndex: -1,
+          onClick: () => scrollBy(1),
+        }, '\u203a')
+      )
+    }
 
     function ThemesPage() {
       const [snapshot, setSnapshot] = React.useState(() => theme.getTheme())
@@ -1097,32 +1173,6 @@ return {
         return null
       }
 
-      /** 多色融合预览球(参照 t3code ThemePreviewCircle):canvas 基底 + accent/操作色对角光晕。 */
-      const renderPreviewBall = (tokens, mode) => {
-        const dark = mode === 'dark'
-        const canvas = tokens['--dsw-alias-bg-base']
-        const accent = tokens['--dsw-alias-brand-primary']
-        const action = tokens['--dsw-alias-button-info-fill']
-        const modeBase = dark
-          ? 'color-mix(in oklab, ' + canvas + ' 80%, #09090b)'
-          : 'color-mix(in oklab, ' + canvas + ' 80%, #ffffff)'
-        const accentPos = dark ? '28% 78%' : '72% 22%'
-        const actionPos = dark ? '82% 18%' : '18% 82%'
-        const fade = dark ? 62 : 72
-        const style = {
-          backgroundColor: modeBase,
-          backgroundImage: [
-            'radial-gradient(circle at ' + accentPos + ' in oklab, ' + accent + ' 0%, color-mix(in oklab, ' + accent + ' ' + fade + '%, transparent) 28%, transparent 58%)',
-            'radial-gradient(circle at ' + actionPos + ' in oklab, color-mix(in oklab, ' + action + ' 45%, transparent) 0%, transparent 55%)',
-          ].join(', '),
-        }
-        return React.createElement('span', {
-          className: 'dsth-ball' + (dark ? ' dsth-ball-dark' : ''),
-          style,
-          title: MODE_LABELS[mode],
-        })
-      }
-
       const renderCard = (palette, extra) => {
         const badge = paletteBadge(palette)
         return React.createElement('div', {
@@ -1139,21 +1189,8 @@ return {
         )
       }
 
-      const renderVariantRow = (palette, mode, variants) => {
-        const idx = Math.max(0, variants.findIndex((v) => v.tokens === palette[mode]))
-        return React.createElement('div', { className: 'dsth-vrow' },
-          renderPreviewBall(palette[mode], mode),
-          React.createElement('span', { className: 'dsth-vlabel' }, MODE_LABELS[mode]),
-          React.createElement('select', {
-            className: 'dsth-input dsth-select dsth-vselect',
-            value: String(idx),
-            onChange: (e) => setVariant(palette, mode, variants[Number(e.target.value)]),
-            title: '选择' + MODE_LABELS[mode] + '变体并应用',
-          },
-            variants.map((v, i) => React.createElement('option', { key: v.label + i, value: String(i) }, v.label))
-          )
-        )
-      }
+      const renderVariantRow = (palette, mode, variants) =>
+        React.createElement(VariantRow, { key: mode, palette, mode, variants })
 
       const renderCustomGrid = store.custom.length > 0
         ? React.createElement('div', { className: 'dsth-grid' },
