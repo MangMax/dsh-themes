@@ -1,5 +1,7 @@
 // DSH 主题 (dsh-themes) — Client 入口
-// 本文件由 VitePlus(vp pack)打包为 IIFE 并包装成插件函数体。
+// 本文件由 VitePlus(vp pack)打包为 IIFE 并包装成 __ModuleLoader__ factory。
+// 以 profile bundle(静态插件)方式挂载:通过注入的 theme / slots / connection
+// 服务工作;与 Host 半区的 RPC 通过 connection.rpc.call('/dsh-themes', ...) 配对。
 // 调色板引擎(语义角色映射、双种子生成、对比度求解)与 VS Code 导入映射的
 // 架构灵感来自 t3code(https://github.com/pingdotgg/t3code),详见仓库 README。
 import { DEFAULT_THEME, TOKEN_NAMES, PALETTES, DEFAULT_PALETTE, CORE_TOKEN_NAMES } from './palette.js'
@@ -8,10 +10,20 @@ import { STYLES_CSS } from './styles.js'
 export const PLUGIN_NAME = 'dsh-themes'
 export default {
   apply(ctx) {
-    const theme = ctx.get('theme')
-    if (theme === undefined) return
-    const slots = ctx.get('slots')
-    if (slots === undefined) return
+    // 等待核心服务就绪后再挂载(而非 apply 时提前 return:静态 kernel 中
+    // 过早 apply 会导致插件永久失效)。React 由安装脚本在 factory 顶层
+    // 注入 `const React = require('react')`(__ModuleLoader__ seed word)。
+    ctx.inject(['theme', 'slots', 'connection'], (scope) => {
+    const theme = scope.theme
+    const slots = scope.slots
+    const connection = scope.connection
+
+    /** connection RPC 失败时 error 为 { code, message, details } 信封,这里兼容字符串并取 message。 */
+    function errorText(res, fallback) {
+      const err = res && res.error
+      if (typeof err === 'string') return err || fallback
+      return (err && err.message) || fallback
+    }
 
     // ============================================================
     // 颜色工具:RGB/HSL 混合 + WCAG 对比度求解
@@ -37,7 +49,7 @@ export default {
     /** 将主题库状态持久化到 ~/.dsh/dsh-themes.json(Host 侧写入)。 */
     function persist() {
       if (!store.loaded) return
-      host.call('persist-themes', {
+      connection.rpc.call('/dsh-themes', 'persist-themes', {
         payload: { current: store.mixed.light, mixed: store.mixed, custom: store.custom },
       }).catch(() => {})
     }
@@ -123,9 +135,9 @@ export default {
     /** 从持久化存储恢复主题库(异步、幂等)。 */
     async function hydrate() {
       try {
-        const res = await host.call('load-themes', {})
-        if (res && res.ok && res.data) {
-          const d = res.data
+        const res = await connection.rpc.call('/dsh-themes', 'load-themes', {})
+        const d = res && res.ok ? res.value : null
+        if (d) {
           if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p)).map((p) => fillPalette(p))
           // half 模型:优先恢复 mixed;旧版 current 转成双侧同值
           if (d.mixed && typeof d.mixed === 'object') {
@@ -219,10 +231,14 @@ export default {
     // ---- 样式 ----
 
     ctx.effect(() => {
-      const disposeCss = styles.insert(STYLES_CSS)
+      // 静态 client 无动态 sandbox 的 styles 座位:自行注入并回收 <style> 标签
+      const styleEl = document.createElement('style')
+      styleEl.setAttribute('data-dsh-themes', '')
+      styleEl.textContent = STYLES_CSS
+      document.head.appendChild(styleEl)
       return () => {
         if (layerDisposer) { try { layerDisposer() } catch { /* ignore */ } layerDisposer = null }
-        disposeCss()
+        styleEl.remove()
       }
     })
 
@@ -354,12 +370,13 @@ export default {
         setBusy('scan')
         setMessage(null)
         try {
-          const res = await host.call('scan-vscode-themes', { root: scanRoot })
+          const res = await connection.rpc.call('/dsh-themes', 'scan-vscode-themes', { root: scanRoot })
           if (res && res.ok) {
-            setScanResults(res.themes || [])
-            if ((res.themes || []).length === 0) setMessage({ kind: 'error', text: '未找到主题文件(扫描了 ' + res.roots + ' 个候选目录)' })
+            const value = res.value || {}
+            setScanResults(value.themes || [])
+            if ((value.themes || []).length === 0) setMessage({ kind: 'error', text: '未找到主题文件(扫描了 ' + value.roots + ' 个候选目录)' })
           } else {
-            setMessage({ kind: 'error', text: (res && res.error) || '扫描失败' })
+            setMessage({ kind: 'error', text: errorText(res, '扫描失败') })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: '调用失败:' + String((e && e.message) || e) })
@@ -371,11 +388,11 @@ export default {
         setBusy(entry.path)
         setMessage(null)
         try {
-          const res = await host.call('read-theme-file', { path: entry.path })
+          const res = await connection.rpc.call('/dsh-themes', 'read-theme-file', { path: entry.path })
           if (res && res.ok) {
-            doImport(res.text, entry.label)
+            doImport(res.value.text, entry.label)
           } else {
-            setMessage({ kind: 'error', text: (res && res.error) || '读取失败' })
+            setMessage({ kind: 'error', text: errorText(res, '读取失败') })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
@@ -388,12 +405,12 @@ export default {
         setBusy('url')
         setMessage(null)
         try {
-          const res = await host.call('fetch-theme-url', { url: url.trim() })
+          const res = await connection.rpc.call('/dsh-themes', 'fetch-theme-url', { url: url.trim() })
           if (res && res.ok) {
-            doImport(res.text, url.trim().split('/').pop() || 'remote')
+            doImport(res.value.text, url.trim().split('/').pop() || 'remote')
             setUrl('')
           } else {
-            setMessage({ kind: 'error', text: (res && res.error) || '获取失败' })
+            setMessage({ kind: 'error', text: errorText(res, '获取失败') })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
@@ -438,21 +455,22 @@ export default {
         setBusy('search')
         setMessage(null)
         try {
-          const res = await host.call('search-open-vsx', { query: searchQuery.trim() })
+          const res = await connection.rpc.call('/dsh-themes', 'search-open-vsx', { query: searchQuery.trim() })
           if (res && res.ok) {
-            const list = res.list || []
+            const list = (res.value && res.value.list) || []
             setSearchResults(list)
             // 作者/许可证需详情接口,后台异步补充,不阻塞搜索展示
             if (list.length > 0) {
-              Promise.all(list.map((ext) => host.call('open-vsx-detail', { namespace: ext.namespace, name: ext.name }).then((d) => {
-                if (d && d.ok) {
-                  setSearchResults((prev) => prev.map((e) => e === ext ? { ...e, author: d.author || e.author, license: d.license || e.license, url: d.url || e.url || '', repository: d.repository || '' } : e))
+              Promise.all(list.map((ext) => connection.rpc.call('/dsh-themes', 'open-vsx-detail', { namespace: ext.namespace, name: ext.name }).then((d) => {
+                const detail = d && d.ok ? d.value : null
+                if (detail) {
+                  setSearchResults((prev) => prev.map((e) => e === ext ? { ...e, author: detail.author || e.author, license: detail.license || e.license, url: detail.url || e.url || '', repository: detail.repository || '' } : e))
                 }
               }).catch(() => {})))
             }
             if (list.length === 0) setMessage({ kind: 'error', text: '没有找到匹配的主题扩展' })
           } else {
-            setMessage({ kind: 'error', text: (res && res.error) || '搜索失败' })
+            setMessage({ kind: 'error', text: errorText(res, '搜索失败') })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: '调用失败:' + String((e && e.message) || e) })
@@ -465,16 +483,17 @@ export default {
         setBusy('import-' + ext.name)
         setMessage(null)
         try {
-          const res = await host.call('install-open-vsx', {
+          const res = await connection.rpc.call('/dsh-themes', 'install-open-vsx', {
             namespace: ext.namespace,
             name: ext.name,
             downloadUrl: ext.downloadUrl,
             version: ext.version,
           })
           if (res && res.ok) {
-            const themes = res.themes || []
+            const value = res.value || {}
+            const themes = value.themes || []
             if (themes.length === 0) {
-              setMessage({ kind: 'error', text: '「' + res.extension + '」未贡献颜色主题' })
+              setMessage({ kind: 'error', text: '「' + value.extension + '」未贡献颜色主题' })
             } else {
               const summary = importBatchThemes(
                 themes.map((t) => ({ text: t.text, label: t.label })),
@@ -483,7 +502,7 @@ export default {
               setMessage({ kind: 'ok', text: summary })
             }
           } else {
-            setMessage({ kind: 'error', text: (res && res.error) || '导入失败' })
+            setMessage({ kind: 'error', text: errorText(res, '导入失败') })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
@@ -814,5 +833,6 @@ export default {
 
     // 从持久化存储恢复主题库(异步;完成后自动应用覆盖层并触发重渲染)
     hydrate()
+    })
   },
 }

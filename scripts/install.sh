@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.1.1"
+PKG_VER="0.1.4"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
 echo "==> [1/4] vp pack 构建"
@@ -31,12 +31,15 @@ export const inject = plugin.inject
 export const Config = plugin.Config
 EOF
 
-# client 产物 -> __ModuleLoader__ 格式:产物自带顶层 return,即 factory 返回值
+# client 产物 -> __ModuleLoader__ 格式:产物自带顶层 return,即 factory 返回值。
+# 静态 client 无全局 React:在 factory 顶部注入 seed word require(factory 的
+# require 参数由 __ModuleLoader__ 提供,"react" 是平台静态模块表种子词)。
 {
   echo "// dsh-themes client 入口(__ModuleLoader__ 格式)"
   echo "window.__ModuleLoader__.load({"
   echo "  id: 'dsh-themes',"
   echo "  factory: (require) => {"
+  echo "    const React = require('react');"
   cat "$ROOT/dist/client/index.cjs"
   echo "  }"
   echo "});"
@@ -58,6 +61,11 @@ cat > "$BUILD_DIR/package.json" <<EOF
   "description": "DSH 外观与主题插件:内置调色板、Open VSX 搜索导入、颜色参数编辑器、明暗独立归属",
   "type": "module",
   "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
   "files": ["lib", "cordis.patch.yml", "README.md", "README_EN.md"],
   "license": "MIT",
   "keywords": ["dsh", "deepseek-harness", "plugin", "theme", "themes", "color", "palette", "appearance"],
