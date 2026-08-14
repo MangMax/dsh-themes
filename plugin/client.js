@@ -884,12 +884,20 @@ return {
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
         '.dsth-select{flex:none;min-width:150px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220%200%2012%2012%22 fill=%22none%22%3E%3Cpath d=%22M3%204.5L6%207.5L9%204.5%22 stroke=%22%2381858C%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E");background-position:right 8px center;background-repeat:no-repeat;background-size:12px 12px;padding-right:24px;cursor:pointer}' +
         '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
+        '.dsth-bar{display:flex;border-radius:6px;overflow:hidden;width:100%;height:10px;margin-top:2px;flex:none}' +
+        '.dsth-bar-seg{flex:1;min-width:0}' +
         '.dsth-colcard{grid-column:1 / -1}' +
-        '.dsth-col-list{display:flex;flex-direction:column;gap:4px}' +
-        '.dsth-colitem{padding:2px 0}' +
-        '.dsth-colname{border:none;background:transparent;color:var(--dsw-alias-label-secondary);cursor:pointer;font:inherit;font-size:12px;line-height:20px;padding:2px 6px;border-radius:6px;flex:1;text-align:left}' +
+        '.dsth-col-list{display:flex;flex-direction:column;gap:6px}' +
+        '.dsth-colitem{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}' +
+        '.dsth-colitem-head{display:flex;align-items:center;gap:8px}' +
+        '.dsth-colname{border:none;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;font-size:12px;line-height:20px;padding:0 4px;border-radius:6px;flex:1;text-align:left;font-weight:500}' +
         '.dsth-colname:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
         '.dsth-colname-active{color:var(--dsw-alias-brand-primary)}' +
+        '.dsth-colmodes{display:flex;gap:6px}' +
+        '.dsth-colmode{flex:1;display:flex;flex-direction:column;gap:4px;align-items:center;padding:5px 6px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:16px}' +
+        '.dsth-colmode:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
+        '.dsth-colmode-active{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}' +
+        '.dsth-colbar{display:flex;border-radius:4px;overflow:hidden;width:100%;height:8px}' +
         '.dsth-pair{display:flex;gap:8px;align-items:center}' +
         '.dsth-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
       )
@@ -1080,6 +1088,10 @@ return {
         return null
       }
 
+      const renderSwatchBar = (tokens) => React.createElement('div', { className: 'dsth-bar' },
+        SWATCH_TOKENS.map((t) => React.createElement('span', { key: t, className: 'dsth-bar-seg', style: { background: tokens[t] } }))
+      )
+
       const renderCard = (palette, extra) => {
         const badge = paletteBadge(palette)
         return React.createElement('div', {
@@ -1098,9 +1110,7 @@ return {
               onClick: () => { applyPalette(palette); theme.setTheme(mode) },
             },
               React.createElement('span', null, MODE_LABELS[mode]),
-              React.createElement('span', { className: 'dsth-swatches' },
-                SWATCH_TOKENS.map((t) => React.createElement('span', { key: t, className: 'dsth-swatch', style: { background: palette[mode][t] } }))
-              )
+              renderSwatchBar(palette[mode])
             ))
           )
         )
@@ -1128,12 +1138,29 @@ return {
         React.createElement('div', { className: 'dsth-col-list' },
           group.palettes.map((p) => {
             const badge = paletteBadge(p)
-            return React.createElement('div', { key: p.id, className: 'dsth-row dsth-colitem' },
-              React.createElement('button', {
-                className: 'dsth-colname' + (badge ? ' dsth-colname-active' : ''),
-                onClick: () => applyPalette(p),
-              }, p.label + (badge ? ' · ' + badge : '')),
-              React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, '删除')
+            return React.createElement('div', { key: p.id, className: 'dsth-colitem' },
+              React.createElement('div', { className: 'dsth-colitem-head' },
+                React.createElement('button', {
+                  className: 'dsth-colname' + (badge ? ' dsth-colname-active' : ''),
+                  onClick: () => applyPalette(p),
+                }, p.label + (badge ? ' · ' + badge : '')),
+                React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, '删除')
+              ),
+              React.createElement('div', { className: 'dsth-colmodes' },
+                ['light', 'dark'].map((mode) => React.createElement('button', {
+                  key: mode,
+                  className: 'dsth-colmode' + (store.current === p.id ? ' dsth-colmode-active' : ''),
+                  onClick: () => { applyPalette(p); theme.setTheme(mode) },
+                  title: '应用「' + p.label + '」并切换为' + MODE_LABELS[mode],
+                },
+                  React.createElement('span', null, MODE_LABELS[mode]),
+                  React.createElement('span', { className: 'dsth-colbar' },
+                    ['--dsw-alias-bg-base', '--dsw-alias-brand-primary', '--dsw-alias-label-primary'].map((t) =>
+                      React.createElement('span', { key: t, className: 'dsth-bar-seg', style: { background: p[mode][t] } })
+                    )
+                  )
+                ))
+              )
             )
           })
         )
@@ -1186,6 +1213,18 @@ return {
         ),
 
         React.createElement('div', { className: 'dsth-section' },
+          React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
+          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, null)))
+        ),
+
+        store.custom.length > 0
+          ? React.createElement('div', { className: 'dsth-section' },
+              React.createElement('div', { className: 'dsth-section-title' }, '导入的主题'),
+              renderCollectionGrid
+            )
+          : null,
+
+        React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '明暗混合'),
           React.createElement('div', { className: 'dsth-row' },
             React.createElement('span', { className: 'dsth-sub' }, '浅色'),
@@ -1209,18 +1248,6 @@ return {
           ),
           React.createElement('div', { className: 'dsth-sub' }, '为浅色与深色分别指定调色板;跟随系统时按系统明暗自动切换,固定模式时仅显示对应一半。')
         ),
-
-        React.createElement('div', { className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
-          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, null)))
-        ),
-
-        store.custom.length > 0
-          ? React.createElement('div', { className: 'dsth-section' },
-              React.createElement('div', { className: 'dsth-section-title' }, '导入的主题'),
-              renderCollectionGrid
-            )
-          : null,
 
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '搜索安装(Open VSX)'),
