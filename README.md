@@ -1,5 +1,7 @@
 # dsh-themes
 
+[English](README_EN.md) | 中文
+
 DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明 / 暗 / 跟随系统外观模式、Open VSX 搜索安装、VS Code 主题导入,主题库持久化。
 
 > 主题引擎(语义角色映射、双种子生成、对比度求解、OKLCH 感知导入映射)的架构灵感来自
@@ -60,3 +62,22 @@ bash scripts/install.sh
 ```
 
 两种方式安装后均需**重启 dsh web**,然后进入 **设置 → 主题** 使用。
+
+## 使用
+
+- **外观模式**:跟随系统 / 浅色 / 深色;主题库默认未指定时由 DSH 默认主题兜底
+- **明暗独立归属**:点击变体只设置该侧外观的主题,不切换外观模式;浅色与暗色可来自不同主题;点击卡片名称则明暗两侧同时使用该主题
+- **颜色编辑器**:主题卡片「修改」进入二级页面——改名、明暗切换、分组 token 色块与 hex 编辑(即时生效)、重置修改
+- **内置主题「复制」**:复制为自定义副本后再编辑,内置主题不可直接修改
+- **从 VS Code 导入**:扫描本地扩展(`~/.vscode/extensions`、`~/.vscode-insiders/extensions`、`~/.cursor/extensions`)、URL 获取、粘贴 JSON;导入主题可修改、删除
+- **搜索安装(Open VSX)**:搜索、查看卡片内简介与链接、一键导入(缓存秒开)
+
+## 卸载
+
+移除插件:
+
+```bash
+dsh plugin --profile web remove dsh-themes
+```
+
+或删除 profile 依赖后重启 dsh web。卸载后调色板覆盖层自动移除,外观恢复默认。
