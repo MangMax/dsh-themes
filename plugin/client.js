@@ -643,12 +643,19 @@ return {
       },
     }
 
+    /** 内置主题统一为带明/暗变体槽的结构(与导入主题一致)。 */
+    const withVariants = (p) => ({
+      ...p,
+      lightVariants: [{ label: '浅色', tokens: p.light }],
+      darkVariants: [{ label: '深色', tokens: p.dark }],
+    })
+
     const PALETTES = [
-      { id: 'dsh-chat', label: 'DSH Chat', light: chatTokens('light'), dark: chatTokens('dark') },
-      { id: 'grove', label: 'Grove', light: createManagedColors('light', '#f2f8f4', '#19734a'), dark: createManagedColors('dark', '#1d2b24', '#69d69a') },
-      { id: 'ocean', label: 'Ocean', light: createManagedColors('light', '#f2f7fb', '#2878b8'), dark: createManagedColors('dark', '#1b2938', '#70b9ee') },
-      { id: 'ember', label: 'Ember', light: createManagedColors('light', '#fff6ef', '#c4602f'), dark: createManagedColors('dark', '#30231e', '#f39a62') },
-      { id: 'iris', label: 'Iris', light: createManagedColors('light', '#f7f4fc', '#7254b9'), dark: createManagedColors('dark', '#29243b', '#ad92f5') },
+      withVariants({ id: 'dsh-chat', label: 'DSH Chat', light: chatTokens('light'), dark: chatTokens('dark') }),
+      withVariants({ id: 'grove', label: 'Grove', light: createManagedColors('light', '#f2f8f4', '#19734a'), dark: createManagedColors('dark', '#1d2b24', '#69d69a') }),
+      withVariants({ id: 'ocean', label: 'Ocean', light: createManagedColors('light', '#f2f7fb', '#2878b8'), dark: createManagedColors('dark', '#1b2938', '#70b9ee') }),
+      withVariants({ id: 'ember', label: 'Ember', light: createManagedColors('light', '#fff6ef', '#c4602f'), dark: createManagedColors('dark', '#30231e', '#f39a62') }),
+      withVariants({ id: 'iris', label: 'Iris', light: createManagedColors('light', '#f7f4fc', '#7254b9'), dark: createManagedColors('dark', '#29243b', '#ad92f5') }),
     ]
 
     // ---- 调色板覆盖层状态 ----
@@ -713,13 +720,6 @@ return {
       persist()
     }
 
-    /** 设置明暗混合的一半;id 为空表示该半使用默认外观。 */
-    function setMixed(mode, id) {
-      store.mixed[mode] = id || null
-      applyLayers()
-      persist()
-    }
-
     function removeCustom(id) {
       store.custom = store.custom.filter((p) => p.id !== id)
       if (store.current === id) store.current = null
@@ -735,13 +735,21 @@ return {
         CORE_TOKEN_NAMES.every((t) => typeof p.light[t] === 'string' && typeof p.dark[t] === 'string')
     }
 
-    /** 补齐缺失的品牌 token(旧版库升级兼容),返回新对象。 */
+    /** 补齐缺失的品牌 token 与变体槽(旧版库升级兼容),返回新对象。 */
     function fillPalette(p) {
       const out = { id: p.id, label: p.label, light: {}, dark: {} }
       for (const t of TOKEN_NAMES) {
         out.light[t] = typeof p.light[t] === 'string' ? p.light[t] : DEFAULT_PALETTE.light[t]
         out.dark[t] = typeof p.dark[t] === 'string' ? p.dark[t] : DEFAULT_PALETTE.dark[t]
       }
+      out.lightVariants = Array.isArray(p.lightVariants) && p.lightVariants.length > 0
+        ? p.lightVariants
+        : [{ label: '浅色', tokens: out.light }]
+      out.darkVariants = Array.isArray(p.darkVariants) && p.darkVariants.length > 0
+        ? p.darkVariants
+        : [{ label: '深色', tokens: out.dark }]
+      if (p.collection && typeof p.collection.id === 'string') out.collection = p.collection
+      if (p.imported) out.imported = true
       return out
     }
 
@@ -753,10 +761,7 @@ return {
           const d = res.data
           if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p)).map((p) => fillPalette(p))
           if (typeof d.current === 'string' && paletteById(d.current)) store.current = d.current
-          if (d.mixed && typeof d.mixed === 'object') {
-            if (typeof d.mixed.light === 'string' && paletteById(d.mixed.light)) store.mixed.light = d.mixed.light
-            if (typeof d.mixed.dark === 'string' && paletteById(d.mixed.dark)) store.mixed.dark = d.mixed.dark
-          }
+          // 旧版的显式明暗混合(mixed)不再恢复:明暗变体选择已内置到主题卡片
         }
       } catch { /* 持久化不可用时静默降级为会话内状态 */ }
       store.loaded = true
@@ -781,44 +786,27 @@ return {
     }
 
     /** 生成唯一 id 并写入库。 */
-    function pushImportedPalette(label, light, dark, collection) {
-      const base = slugify(label)
+    function pushImportedPalette(palette) {
+      const base = slugify(palette.label)
       let id = 'vsc-' + base
       let n = 2
       while (store.custom.some((p) => p.id === id)) id = 'vsc-' + base + '-' + n++
-      const palette = { id, label, light, dark, imported: true, ...(collection ? { collection } : {}) }
-      store.custom.push(palette)
-      return palette
+      const final = { ...palette, id }
+      store.custom.push(final)
+      return final
     }
 
-    /** 明暗变体配对(参考 t3code pairVsCodeThemes):去掉 label 中的 light/dark 词后同名的一对合并为一个双模式主题。 */
-    function stripAppearance(label) {
-      return label.replace(/\b(?:light|dark)\b/gi, ' ').replace(/\s+/g, ' ').trim()
+    /** 设置主题某个明暗槽的变体并应用。 */
+    function setVariant(palette, mode, variant) {
+      if (mode === 'light') palette.light = variant.tokens
+      else palette.dark = variant.tokens
+      if (store.current !== palette.id) store.current = palette.id
+      applyLayers()
+      persist()
+      theme.setTheme(mode)
     }
 
-    function pairImportedEntries(entries) {
-      const groups = new Map()
-      const result = []
-      for (const e of entries) {
-        const key = stripAppearance(e.sourceLabel)
-        if (key && key !== e.sourceLabel) {
-          if (!groups.has(key)) groups.set(key, { light: [], dark: [] })
-          groups.get(key)[e.appearance].push(e)
-        } else {
-          result.push(e)
-        }
-      }
-      for (const [key, group] of groups) {
-        if (group.light.length === 1 && group.dark.length === 1) {
-          result.push({ label: key, light: group.light[0].light, dark: group.dark[0].dark })
-        } else {
-          for (const e of [...group.light, ...group.dark]) result.push(e)
-        }
-      }
-      return result
-    }
-
-    /** 批量导入(同一扩展):逐个解析后按明暗配对,统一写入并应用第一个;collection 用于分组展示。 */
+    /** 明暗变体聚合(参照 t3code variants 模型):同一扩展的所有明色文件聚合为明色槽、暗色文件聚合为暗色槽,一个主题一张卡片。 */
     function importBatchThemes(results, collection) {
       const entries = []
       for (const r of results) {
@@ -827,15 +815,35 @@ return {
         } catch { /* 跳过无法解析的文件 */ }
       }
       if (entries.length === 0) throw new Error('没有可导入的主题文件')
-      const paired = pairImportedEntries(entries)
-      const palettes = paired.map((p) => pushImportedPalette(p.label, p.light, p.dark, collection))
-      applyPalette(palettes[0])
-      return '已导入 ' + palettes.length + ' 个主题(含 ' + (entries.length - palettes.length) + ' 个明暗配对)'
+      const lights = entries.filter((e) => e.appearance === 'light')
+      const darks = entries.filter((e) => e.appearance === 'dark')
+      if (lights.length === 0 && darks.length === 0) throw new Error('没有可导入的主题文件')
+      const light = lights[0] ? lights[0].light : darks[0].dark
+      const dark = darks[0] ? darks[0].dark : lights[0].light
+      const label = (collection && collection.label) || entries[0].label
+      const palette = pushImportedPalette({
+        label,
+        ...(collection ? { collection } : {}),
+        imported: true,
+        light,
+        dark,
+        lightVariants: lights.map((e) => ({ label: e.label, tokens: e.light })),
+        darkVariants: darks.map((e) => ({ label: e.label, tokens: e.dark })),
+      })
+      applyPalette(palette)
+      return '已导入「' + palette.label + '」:明色 ' + lights.length + ' 个变体,暗色 ' + darks.length + ' 个变体'
     }
 
     function importVsCodeTheme(text, sourceName) {
       const entry = buildImportedEntry(text, sourceName)
-      const palette = pushImportedPalette(entry.label, entry.light, entry.dark)
+      const palette = pushImportedPalette({
+        label: entry.label,
+        imported: true,
+        light: entry.light,
+        dark: entry.dark,
+        lightVariants: [{ label: '浅色', tokens: entry.light }],
+        darkVariants: [{ label: '深色', tokens: entry.dark }],
+      })
       applyPalette(palette)
       return palette
     }
@@ -889,15 +897,9 @@ return {
         '.dsth-colcard{grid-column:1 / -1}' +
         '.dsth-col-list{display:flex;flex-direction:column;gap:6px}' +
         '.dsth-colitem{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}' +
-        '.dsth-colitem-head{display:flex;align-items:center;gap:8px}' +
-        '.dsth-colname{border:none;background:transparent;color:var(--dsw-alias-label-primary);cursor:pointer;font:inherit;font-size:12px;line-height:20px;padding:0 4px;border-radius:6px;flex:1;text-align:left;font-weight:500}' +
-        '.dsth-colname:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
-        '.dsth-colname-active{color:var(--dsw-alias-brand-primary)}' +
-        '.dsth-colmodes{display:flex;gap:6px}' +
-        '.dsth-colmode{flex:1;display:flex;flex-direction:column;gap:4px;align-items:center;padding:5px 6px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:16px}' +
-        '.dsth-colmode:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
-        '.dsth-colmode-active{border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-primary)}' +
-        '.dsth-colbar{display:flex;border-radius:4px;overflow:hidden;width:100%;height:8px}' +
+        '.dsth-vrow{display:flex;gap:6px;align-items:center}' +
+        '.dsth-vlabel{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;flex:none;width:28px}' +
+        '.dsth-vselect{flex:none;min-width:130px}' +
         '.dsth-pair{display:flex;gap:8px;align-items:center}' +
         '.dsth-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
       )
@@ -1098,80 +1100,37 @@ return {
           key: palette.id,
           className: 'dsth-card' + (badge ? ' dsth-selected' : ''),
         },
-          React.createElement('div', { className: 'dsth-card-name', onClick: () => applyPalette(palette), title: '应用调色板(保持当前外观模式)' },
+          React.createElement('div', { className: 'dsth-card-name', onClick: () => applyPalette(palette), title: '应用主题(保持当前外观模式)' },
             palette.label,
             badge ? React.createElement('span', { className: 'dsth-badge' }, badge) : null,
             extra || null
           ),
-          React.createElement('div', { className: 'dsth-modes' },
-            ['light', 'dark'].map((mode) => React.createElement('button', {
-              key: mode,
-              className: 'dsth-mode',
-              onClick: () => { applyPalette(palette); theme.setTheme(mode) },
-            },
-              React.createElement('span', null, MODE_LABELS[mode]),
-              renderSwatchBar(palette[mode])
-            ))
-          )
+          renderVariantRow(palette, 'light', palette.lightVariants),
+          renderVariantRow(palette, 'dark', palette.darkVariants)
         )
       }
 
-      const customGroups = (() => {
-        const singles = []
-        const collections = new Map()
-        for (const p of store.custom) {
-          if (p.collection && typeof p.collection.id === 'string') {
-            if (!collections.has(p.collection.id)) collections.set(p.collection.id, { collection: p.collection, palettes: [] })
-            collections.get(p.collection.id).palettes.push(p)
-          } else {
-            singles.push(p)
-          }
-        }
-        return { singles, collections: [...collections.values()] }
-      })()
-
-      const renderCollectionCard = (group) => React.createElement('div', {
-        key: 'col-' + group.collection.id,
-        className: 'dsth-card dsth-colcard',
-      },
-        React.createElement('div', { className: 'dsth-card-name' }, group.collection.label),
-        React.createElement('div', { className: 'dsth-col-list' },
-          group.palettes.map((p) => {
-            const badge = paletteBadge(p)
-            return React.createElement('div', { key: p.id, className: 'dsth-colitem' },
-              React.createElement('div', { className: 'dsth-colitem-head' },
-                React.createElement('button', {
-                  className: 'dsth-colname' + (badge ? ' dsth-colname-active' : ''),
-                  onClick: () => applyPalette(p),
-                }, p.label + (badge ? ' · ' + badge : '')),
-                React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, '删除')
-              ),
-              React.createElement('div', { className: 'dsth-colmodes' },
-                ['light', 'dark'].map((mode) => React.createElement('button', {
-                  key: mode,
-                  className: 'dsth-colmode' + (store.current === p.id ? ' dsth-colmode-active' : ''),
-                  onClick: () => { applyPalette(p); theme.setTheme(mode) },
-                  title: '应用「' + p.label + '」并切换为' + MODE_LABELS[mode],
-                },
-                  React.createElement('span', null, MODE_LABELS[mode]),
-                  React.createElement('span', { className: 'dsth-colbar' },
-                    ['--dsw-alias-bg-base', '--dsw-alias-brand-primary', '--dsw-alias-label-primary'].map((t) =>
-                      React.createElement('span', { key: t, className: 'dsth-bar-seg', style: { background: p[mode][t] } })
-                    )
-                  )
-                ))
-              )
-            )
-          })
+      const renderVariantRow = (palette, mode, variants) => {
+        const idx = Math.max(0, variants.findIndex((v) => v.tokens === palette[mode]))
+        return React.createElement('div', { className: 'dsth-vrow' },
+          React.createElement('span', { className: 'dsth-vlabel' }, MODE_LABELS[mode]),
+          React.createElement('select', {
+            className: 'dsth-input dsth-select dsth-vselect',
+            value: String(idx),
+            onChange: (e) => setVariant(palette, mode, variants[Number(e.target.value)]),
+            title: '选择' + MODE_LABELS[mode] + '变体并应用',
+          },
+            variants.map((v, i) => React.createElement('option', { key: v.label + i, value: String(i) }, v.label))
+          ),
+          renderSwatchBar(palette[mode])
         )
-      )
+      }
 
-      const renderCollectionGrid = customGroups.singles.length > 0 || customGroups.collections.length > 0
+      const renderCustomGrid = store.custom.length > 0
         ? React.createElement('div', { className: 'dsth-grid' },
-            customGroups.singles.map((p) => renderCard(p,
+            store.custom.map((p) => renderCard(p,
               React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, '删除')
-            )),
-            customGroups.collections.map((g) => renderCollectionCard(g))
+            ))
           )
         : null
 
@@ -1220,34 +1179,9 @@ return {
         store.custom.length > 0
           ? React.createElement('div', { className: 'dsth-section' },
               React.createElement('div', { className: 'dsth-section-title' }, '导入的主题'),
-              renderCollectionGrid
+              renderCustomGrid
             )
           : null,
-
-        React.createElement('div', { className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, '明暗混合'),
-          React.createElement('div', { className: 'dsth-row' },
-            React.createElement('span', { className: 'dsth-sub' }, '浅色'),
-            React.createElement('select', {
-              className: 'dsth-input dsth-select',
-              value: store.mixed.light || '',
-              onChange: (e) => setMixed('light', e.target.value),
-            },
-              React.createElement('option', { value: '' }, '默认外观'),
-              [...PALETTES, ...store.custom].map((p) => React.createElement('option', { key: p.id, value: p.id }, p.label))
-            ),
-            React.createElement('span', { className: 'dsth-sub' }, '深色'),
-            React.createElement('select', {
-              className: 'dsth-input dsth-select',
-              value: store.mixed.dark || '',
-              onChange: (e) => setMixed('dark', e.target.value),
-            },
-              React.createElement('option', { value: '' }, '默认外观'),
-              [...PALETTES, ...store.custom].map((p) => React.createElement('option', { key: p.id, value: p.id }, p.label))
-            )
-          ),
-          React.createElement('div', { className: 'dsth-sub' }, '为浅色与深色分别指定调色板;跟随系统时按系统明暗自动切换,固定模式时仅显示对应一半。')
-        ),
 
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '搜索安装(Open VSX)'),
