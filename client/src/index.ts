@@ -485,24 +485,32 @@ export default {
         try { window.open(url, '_blank', 'noopener') } catch { /* ignore */ }
       }
 
-      /** 编辑内置主题时先复制为自定义主题,保证修改可持久化且不影响内置原型。 */
+      /** 打开编辑器:直接编辑传入的主题(内置主题无修改入口,仅自定义主题可编辑)。 */
       const openEditor = (palette) => {
-        let target = palette
-        if (PALETTES.includes(palette)) {
-          target = {
-            id: 'edit-' + palette.id,
-            label: palette.label + '(已修改)',
-            imported: true,
-            light: { ...palette.light },
-            dark: { ...palette.dark },
-            lightVariants: [{ label: '浅色', tokens: { ...palette.light } }],
-            darkVariants: [{ label: '深色', tokens: { ...palette.dark } }],
-          }
-          store.custom.push(target)
-        }
-        setEditing(target)
+        setEditing(palette)
         setEditMode('light')
-        applyPalette(target)
+        applyPalette(palette)
+      }
+
+      /** 复制主题(内置主题的快速复制入口):深拷贝为新自定义主题并进入编辑器。 */
+      const copyTheme = (palette) => {
+        const base = 'vsc-' + slugify(palette.label + '-copy')
+        let id = base
+        let n = 2
+        while (store.custom.some((p) => p.id === id)) id = base + '-' + n++
+        const copy = {
+          id,
+          label: palette.label + ' 副本',
+          imported: true,
+          light: { ...palette.light },
+          dark: { ...palette.dark },
+          lightVariants: palette.lightVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
+          darkVariants: palette.darkVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
+        }
+        store.custom.push(copy)
+        setEditing(copy)
+        setEditMode('light')
+        applyPalette(copy)
       }
 
       const setToken = (palette, mode, token, value) => {
@@ -572,6 +580,7 @@ export default {
         React.createElement(VariantRow, { key: mode, palette, mode, variants })
 
       const renderEditButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => openEditor(p) }, '修改')
+      const renderCopyButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => copyTheme(p) }, '复制')
 
       const renderCustomGrid = store.custom.length > 0
         ? React.createElement('div', { className: 'dsth-grid' },
@@ -689,7 +698,7 @@ export default {
 
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
-          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, renderEditButton(p))))
+          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, renderCopyButton(p))))
         ),
 
         store.custom.length > 0
