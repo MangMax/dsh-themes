@@ -208,7 +208,7 @@ return {
       let lastError = null
       for (let attempt = 0; attempt < 3; attempt += 1) {
         try {
-          await runShell('curl -fsSL --connect-timeout 10 --tlsv1.2 --max-filesize ' + maxBytes + ' -o "' + out + '" "' + url + '"')
+          await runShell('curl -fsSL --compressed --connect-timeout 10 --tlsv1.2 --max-filesize ' + maxBytes + ' -o "' + out + '" "' + url + '"')
           const target = await fs.resolve(out)
           const text = await fs.readText(target)
           await runShell('rm -f "' + out + '"').catch(() => {})
@@ -234,75 +234,52 @@ return {
       const query = args && typeof args.query === 'string' ? args.query.trim() : ''
       if (!query) return { ok: false, error: '请输入搜索关键词' }
       try {
-        const url = 'https://open-vsx.org/api/-/search?query=' + encodeURIComponent(query) + '&category=Themes&size=14&sortBy=downloadCount&sortOrder=desc'
+        // 单次搜索请求即返回(不再逐项 detail/manifest 预检;主题判断在导入时完成,速度优先)
+        const url = 'https://open-vsx.org/api/-/search?query=' + encodeURIComponent(query) + '&category=Themes&size=12&sortBy=downloadCount&sortOrder=desc'
         const text = await curlText(url, 262144)
         const data = JSON.parse(text)
         const exts = Array.isArray(data.extensions) ? data.extensions : []
-        const base = exts.map((e) => ({
+        const list = exts.map((e) => ({
           namespace: String(e.namespace || ''),
           name: String(e.name || ''),
           displayName: String(e.displayName || e.name || ''),
           version: String(e.version || ''),
           downloadCount: Number(e.downloadCount) || 0,
           downloadUrl: e.files && typeof e.files.download === 'string' ? e.files.download : null,
-        })).filter((e) => e.namespace && e.name && e.downloadUrl)
-
-        // 详情 + manifest:仅保留确实贡献了颜色主题的扩展;详情失败时保留(主题数未知),不误过滤
-        const kept = []
-        let idx = 0
-        const fetchDetail = async (entry) => {
-          let detail = null
-          try {
-            detail = JSON.parse(await curlText('https://open-vsx.org/api/' + encodeURIComponent(entry.namespace) + '/' + encodeURIComponent(entry.name), 131072))
-          } catch { /* 网络失败,保留条目 */ }
-          if (!detail || typeof detail.name !== 'string' || !detail.files || typeof detail.files !== 'object') {
-            kept.push({ ...entry, themeCount: -1 })
-            return
-          }
-          let themeCount = 0
-          let manifestFailed = false
-          try {
-            if (typeof detail.files.manifest === 'string') {
-              const manifest = JSON.parse(await curlText(detail.files.manifest, 131072))
-              const contrib = manifest.contributes && manifest.contributes.themes
-              themeCount = Array.isArray(contrib) ? contrib.length : 0
-            }
-          } catch { manifestFailed = true }
-          if (manifestFailed) { kept.push({ ...entry, themeCount: -1 }); return }
-          if (themeCount === 0) return // 详情有效但未贡献颜色主题(图标主题等),过滤
-          kept.push({ ...entry, themeCount })
-        }
-        const workers = Math.min(4, base.length)
-        await Promise.all(Array.from({ length: workers }, async () => {
-          while (idx < base.length) {
-            const entry = base[idx]
-            idx += 1
-            await fetchDetail(entry)
-          }
-        }))
-        return { ok: true, list: kept.slice(0, 10), filtered: base.length - kept.length }
+        })).filter((e) => e.namespace && e.name && e.downloadUrl).slice(0, 10)
+        return { ok: true, list }
       } catch (e) {
         return { ok: false, error: '搜索失败:' + ((e && e.message) || String(e)) }
       }
     })
 
-    // ---- download a VSIX, unzip it, and list its contributed themes ----
+    // ---- download a VSIX(带版本缓存),unzip,并直接返回贡献主题的完整 JSON(include 已合并,并行读取) ----
     harness.handle('install-open-vsx', async (args) => {
       const fs = ctx.get('fs')
       if (fs === undefined) return { ok: false, error: '文件系统服务不可用' }
       const namespace = args && typeof args.namespace === 'string' ? args.namespace : ''
       const name = args && typeof args.name === 'string' ? args.name : ''
       const url = args && typeof args.downloadUrl === 'string' ? args.downloadUrl : ''
+      const version = args && typeof args.version === 'string' ? args.version : ''
       if (!namespace || !name || !url) return { ok: false, error: '参数不完整' }
       try {
         let home = null
         try { home = await homeDir() } catch { /* ignore */ }
         let tmp = null
         try { tmp = await tmpDir() } catch { /* ignore */ }
-        const dir = (tmp || home || '/tmp') + '/dsh-themes/' + namespace + '.' + name
-        await runShell('rm -rf "' + dir + '" && mkdir -p "' + dir + '"')
-        await runShell('curl -fsSL --max-filesize 20971520 -o "' + dir + '/ext.vsix" "' + url + '"')
-        await runShell('unzip -o -q "' + dir + '/ext.vsix" -d "' + dir + '/unpacked"')
+        const dir = (tmp || home || '/tmp') + '/dsh-themes/' + namespace + '.' + name + '/' + (version || 'latest')
+        // 版本化缓存:已解压过则跳过下载,重复导入秒开
+        let cached = false
+        try {
+          const pkgTarget = await fs.resolve(dir + '/unpacked/extension/package.json')
+          const pkgInfo = await fs.stat(pkgTarget)
+          cached = pkgInfo !== undefined && pkgInfo.type === 'file'
+        } catch { /* not cached */ }
+        if (!cached) {
+          await runShell('rm -rf "' + dir + '" && mkdir -p "' + dir + '"')
+          await runShell('curl -fsSL --compressed --max-filesize 20971520 -o "' + dir + '/ext.vsix" "' + url + '"')
+          await runShell('unzip -o -q "' + dir + '/ext.vsix" -d "' + dir + '/unpacked"')
+        }
 
         let pkgText = null
         for (const candidate of [dir + '/unpacked/extension/package.json', dir + '/unpacked/package.json']) {
@@ -321,15 +298,42 @@ return {
         const contrib = pkg && pkg.contributes && pkg.contributes.themes
         const themes = []
         if (Array.isArray(contrib)) {
-          for (const t of contrib) {
-            if (themes.length >= 40) break
-            if (!t || typeof t.path !== 'string' || !/\.json$/i.test(t.path)) continue
-            themes.push({
-              path: dir + '/unpacked/extension/' + t.path.replace(/^\.\//, ''),
-              label: String(t.label || t.path.split('/').pop().replace(/\.json$/i, '')),
+          // 并行读取全部主题文件(含 include 合并,深度上限 8)
+          const readTheme = async (t) => {
+            if (!t || typeof t.path !== 'string' || !/\.json$/i.test(t.path)) return null
+            const rel = t.path.replace(/^\.\//, '')
+            const seen = new Set()
+            const loadChain = async (currentPath, depth) => {
+              if (depth > 8 || seen.has(currentPath)) return null
+              seen.add(currentPath)
+              try {
+                const target = await fs.resolve(currentPath)
+                const info = await fs.stat(target)
+                if (info === undefined || info.type !== 'file') return null
+                const rawText = await fs.readText(target)
+                if (rawText.length > 512 * 1024) return null
+                let raw = null
+                try { raw = JSON.parse(rawText) } catch { return null }
+                if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+                if (typeof raw.include !== 'string') return raw
+                const slash = currentPath.lastIndexOf('/')
+                const d = slash >= 0 ? currentPath.slice(0, slash) : '.'
+                const includePath = raw.include.startsWith('./') ? d + '/' + raw.include.slice(2) : d + '/' + raw.include
+                const base = await loadChain(includePath, depth + 1)
+                if (!base) return raw
+                return { ...base, ...raw, colors: { ...(base.colors || {}), ...(raw.colors || {}) } }
+              } catch { return null }
+            }
+            const merged = await loadChain(dir + '/unpacked/extension/' + rel, 0)
+            if (!merged) return null
+            return {
+              label: String(t.label || rel.split('/').pop().replace(/\.json$/i, '')),
               uiTheme: String(t.uiTheme || ''),
-            })
+              text: JSON.stringify(merged),
+            }
           }
+          const results = await Promise.all(contrib.slice(0, 40).map(readTheme))
+          for (const r of results) if (r) themes.push(r)
         }
         return {
           ok: true,

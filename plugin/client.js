@@ -6,11 +6,16 @@
 // 品牌与命名均为 DSH 自有。
 //
 // 实现要点:
-//   - 13 个 DSH alias token 以 theme.overrideTokens 单覆盖层应用(每 token 携带
-//     light/dark 双值),外观模式由 theme.setTheme('system'|'light'|'dark') 决定;
-//   - 明暗混合:浅色与深色可分别指定调色板,缺半用 DSH 默认值兜底;
-//   - 搜索安装:经 Open VSX 搜索扩展,Host 下载 VSIX 并解压列出贡献的主题;
-//   - 持久化:主题库(导入、选择、混合)保存到 ~/.dsh/dsh-themes.json,重启后恢复;
+//   - 25 个 DSH token(含品牌色系与状态动画色)以 theme.overrideTokens 单覆盖层应用
+//     (每 token 携带 light/dark 双值),外观模式由 theme.setTheme('system'|'light'|'dark') 决定;
+//   - 默认主题(DSH 原生外观)也是一张色板卡片,删除使用中的导入主题或点击恢复均回退到它;
+//   - 主题卡片模型(参照 t3code):每个主题含明色/暗色两个变体槽,槽内聚合全部
+//     明色/暗色变体可选;导入的扩展聚合为一个主题卡片;
+//   - 变体选择器:多色融合球列表(参照 t3code ThemePreviewCircle),固定槽位消除选中放大跳动,
+//     溢出时左右箭头导航,悬停显示变体名;
+//   - 搜索安装:Open VSX 单请求搜索,点击「导入」一步完成下载、解析(include 合并)与聚合导入;
+//   - 导入映射:OKLCH 感知引擎派生表面,workbench 指定值对比度门控,操作色独立于 accent;
+//   - 持久化:主题库保存到 ~/.dsh/dsh-themes.json,重启后恢复;
 //   - 设置页注册在 settings.section 槽位(id: dsh-themes)。
 return {
   apply(ctx) {
@@ -875,11 +880,6 @@ return {
         '.dsth-card.dsth-selected{border-color:var(--dsw-alias-brand-primary)}' +
         '.dsth-card-name{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:20px;cursor:pointer}' +
         '.dsth-badge{color:var(--dsw-alias-label-secondary);font-size:10px;font-weight:400}' +
-        '.dsth-modes{display:flex;gap:8px}' +
-        '.dsth-mode{flex:1;display:flex;flex-direction:column;gap:6px;align-items:center;padding:8px 6px;border-radius:10px;border:1px solid var(--dsw-alias-border-l1);background:transparent;cursor:pointer;color:var(--dsw-alias-label-secondary);font:inherit;font-size:11px;line-height:16px}' +
-        '.dsth-mode:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
-        '.dsth-swatches{display:flex;gap:4px}' +
-        '.dsth-swatch{width:14px;height:14px;border-radius:50%;border:1px solid var(--dsw-alias-border-l1);box-sizing:border-box}' +
         '.dsth-row{display:flex;gap:8px;align-items:center}' +
         '.dsth-input{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);border-radius:8px;padding:5px 10px;font-size:12px;line-height:18px;min-width:0;flex:1;font:inherit}' +
         '.dsth-input:focus{outline:none;border-color:var(--dsw-alias-brand-primary)}' +
@@ -899,8 +899,6 @@ return {
         '.dsth-del:hover{background:var(--dsw-alias-interactive-bg-hover-danger)}' +
         '.dsth-foot{display:flex;align-items:center;gap:12px;padding-top:6px}' +
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
-        '.dsth-select{flex:none;min-width:150px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220%200%2012%2012%22 fill=%22none%22%3E%3Cpath d=%22M3%204.5L6%207.5L9%204.5%22 stroke=%22%2381858C%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E");background-position:right 8px center;background-repeat:no-repeat;background-size:12px 12px;padding-right:24px;cursor:pointer}' +
-        '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
         '.dsth-ball-slot{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center}' +
         '.dsth-ball{width:20px;height:20px;border-radius:50%;display:inline-block;cursor:pointer;border:none;padding:0;transition:width .15s ease,height .15s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
         '.dsth-ball-dark{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14),0 1px 2px rgba(0,0,0,0.18)}' +
@@ -910,9 +908,6 @@ return {
         '.dsth-nav{flex:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);cursor:pointer;font-size:13px;line-height:1;display:grid;place-items:center;padding:0;font-family:inherit}' +
         '.dsth-nav:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}' +
         '.dsth-nav-disabled{opacity:.3;cursor:default}' +
-        '.dsth-colcard{grid-column:1 / -1}' +
-        '.dsth-col-list{display:flex;flex-direction:column;gap:6px}' +
-        '.dsth-colitem{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}' +
         '.dsth-vrow{display:flex;gap:6px;align-items:center}' +
         '.dsth-vlabel{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;flex:none;width:28px}' +
 
@@ -1012,7 +1007,6 @@ return {
       const [message, setMessage] = React.useState(null)
       const [searchQuery, setSearchQuery] = React.useState('')
       const [searchResults, setSearchResults] = React.useState(null)
-      const [searchNote, setSearchNote] = React.useState('')
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
@@ -1094,7 +1088,6 @@ return {
           const res = await host.call('search-open-vsx', { query: searchQuery.trim() })
           if (res && res.ok) {
             setSearchResults(res.list || [])
-            setSearchNote(res.filtered > 0 ? '已过滤 ' + res.filtered + ' 个非主题扩展' : '')
             if ((res.list || []).length === 0) setMessage({ kind: 'error', text: '没有找到匹配的主题扩展' })
           } else {
             setMessage({ kind: 'error', text: (res && res.error) || '搜索失败' })
@@ -1105,75 +1098,41 @@ return {
         setBusy('')
       }
 
-      const installExt = async (ext) => {
-        setBusy('install-' + ext.name)
+      /** 一步导入:下载 VSIX → 解压(带版本缓存)→ 解析全部主题(include 已合并)→ 聚合导入并应用。 */
+      const importExt = async (ext) => {
+        setBusy('import-' + ext.name)
         setMessage(null)
         try {
-          const res = await host.call('install-open-vsx', { namespace: ext.namespace, name: ext.name, downloadUrl: ext.downloadUrl })
+          const res = await host.call('install-open-vsx', {
+            namespace: ext.namespace,
+            name: ext.name,
+            downloadUrl: ext.downloadUrl,
+            version: ext.version,
+          })
           if (res && res.ok) {
-            setSearchResults(searchResults.map((e) => e === ext ? { ...e, themes: res.themes || [], installedVersion: res.version } : e))
-            setMessage({ kind: 'ok', text: '已获取「' + res.extension + '」,含 ' + (res.themes || []).length + ' 个主题' })
+            const themes = res.themes || []
+            if (themes.length === 0) {
+              setMessage({ kind: 'error', text: '「' + res.extension + '」未贡献颜色主题' })
+            } else {
+              const summary = importBatchThemes(
+                themes.map((t) => ({ text: t.text, label: t.label })),
+                { id: 'ovx-' + ext.namespace + '.' + ext.name, label: ext.displayName }
+              )
+              setMessage({ kind: 'ok', text: summary })
+            }
           } else {
-            setMessage({ kind: 'error', text: (res && res.error) || '安装失败' })
+            setMessage({ kind: 'error', text: (res && res.error) || '导入失败' })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
         }
         setBusy('')
-      }
-
-      const importPath = async (t) => {
-        setBusy(t.path)
-        setMessage(null)
-        try {
-          const res = await host.call('read-theme-file', { path: t.path })
-          if (res && res.ok) {
-            doImport(res.text, t.label)
-          } else {
-            setMessage({ kind: 'error', text: (res && res.error) || '读取失败' })
-          }
-        } catch (e) {
-          setMessage({ kind: 'error', text: String((e && e.message) || e) })
-        }
-        setBusy('')
-      }
-
-      /** 批量导入扩展的全部主题,明暗变体自动配对。 */
-      const importAllThemes = async (ext) => {
-        setBusy('all-' + ext.name)
-        setMessage(null)
-        try {
-          const results = []
-          for (const t of ext.themes) {
-            const res = await host.call('read-theme-file', { path: t.path })
-            if (res && res.ok) results.push({ text: res.text, label: t.label })
-          }
-          if (results.length === 0) {
-            setMessage({ kind: 'error', text: '没有可读取的主题文件' })
-            setBusy('')
-            return
-          }
-          const summary = importBatchThemes(results, { id: 'ovx-' + ext.namespace + '.' + ext.name, label: ext.displayName })
-          setMessage({ kind: 'ok', text: summary })
-        } catch (e) {
-          setMessage({ kind: 'error', text: '导入失败:' + String((e && e.message) || e) })
-        }
-        setBusy('')
-      }
-
-      const themeCountText = (ext) => {
-        if (ext.themeCount === -1) return ''
-        if (ext.themeCount === 0) return ' · 无颜色主题'
-        return ' · 含 ' + ext.themeCount + ' 个颜色主题'
       }
 
       // ---- 渲染 ----
 
       const paletteBadge = (palette) => {
         if (store.current === palette.id) return '使用中'
-        if (store.mixed.light === palette.id && store.mixed.dark === palette.id) return '明暗'
-        if (store.mixed.light === palette.id) return '浅色'
-        if (store.mixed.dark === palette.id) return '深色'
         return null
       }
 
@@ -1223,7 +1182,7 @@ return {
       return React.createElement('div', { className: 'dsth-page' },
         React.createElement('div', { className: 'dsth-title' }, '主题'),
         React.createElement('p', { className: 'dsth-sub' },
-          '5 套内置调色板 × 明/暗变体,支持跟随系统;可从 VS Code 扩展、URL 或粘贴 JSON 导入主题。'
+          '内置主题 × 明/暗变体,支持跟随系统;可从 Open VSX 搜索安装、VS Code 扩展、URL 或粘贴 JSON 导入主题。'
         ),
 
         React.createElement('div', { className: 'dsth-section' },
@@ -1266,45 +1225,21 @@ return {
               busy === 'search' ? '搜索中…' : '搜索'
             )
           ),
-          searchNote ? React.createElement('div', { className: 'dsth-sub' }, searchNote) : null,
+          React.createElement('div', { className: 'dsth-sub' }, '点击「导入」一步完成下载、解析与聚合导入;重复导入走缓存,秒开。'),
           searchResults && searchResults.length > 0
             ? React.createElement('div', { className: 'dsth-list' },
-                searchResults.map((ext) => React.createElement('div', { key: ext.namespace + '.' + ext.name, className: 'dsth-listitem dsth-listitem-col' },
-                  React.createElement('div', { className: 'dsth-row' },
-                    React.createElement('div', { className: 'dsth-listitem-main' },
-                      React.createElement('span', { className: 'dsth-listitem-name' }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
-                      React.createElement('span', { className: 'dsth-listitem-path' },
-                        'v' + ext.version + ' · ' + fmtCount(ext.downloadCount) + ' 次下载' + themeCountText(ext) + (ext.installedVersion ? ' · 已获取 v' + ext.installedVersion : '')
-                      )
-                    ),
-                    React.createElement('button', {
-                      className: 'dsth-btn',
-                      disabled: busy !== '',
-                      onClick: () => installExt(ext),
-                    }, busy === 'install-' + ext.name ? '获取中…' : (ext.themes ? '重新获取' : '获取'))
+                searchResults.map((ext) => React.createElement('div', { key: ext.namespace + '.' + ext.name, className: 'dsth-listitem' },
+                  React.createElement('div', { className: 'dsth-listitem-main' },
+                    React.createElement('span', { className: 'dsth-listitem-name' }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
+                    React.createElement('span', { className: 'dsth-listitem-path' },
+                      'v' + ext.version + ' · ' + fmtCount(ext.downloadCount) + ' 次下载'
+                    )
                   ),
-                  ext.themes && ext.themes.length > 0
-                    ? React.createElement('div', { className: 'dsth-list' },
-                        React.createElement('div', { className: 'dsth-row' },
-                          React.createElement('span', { className: 'dsth-sub' }, '明暗变体将自动配对为一个主题'),
-                          React.createElement('button', {
-                            className: 'dsth-btn',
-                            disabled: busy !== '',
-                            onClick: () => importAllThemes(ext),
-                          }, busy === 'all-' + ext.name ? '导入中…' : '全部导入')
-                        ),
-                        ext.themes.map((t) => React.createElement('div', { key: t.path, className: 'dsth-listitem' },
-                          React.createElement('div', { className: 'dsth-listitem-main' },
-                            React.createElement('span', { className: 'dsth-listitem-name' }, t.label),
-                            React.createElement('span', { className: 'dsth-listitem-path' }, t.uiTheme || '颜色主题')
-                          ),
-                          React.createElement('button', { className: 'dsth-btn', disabled: busy !== '', onClick: () => importPath(t) }, '导入')
-                        ))
-                      )
-                    : null,
-                  ext.themes && ext.themes.length === 0
-                    ? React.createElement('div', { className: 'dsth-sub' }, '该扩展未贡献颜色主题')
-                    : null
+                  React.createElement('button', {
+                    className: 'dsth-btn',
+                    disabled: busy !== '',
+                    onClick: () => importExt(ext),
+                  }, busy === 'import-' + ext.name ? '导入中…' : '导入')
                 ))
               )
             : null
