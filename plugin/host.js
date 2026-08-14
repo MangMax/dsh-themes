@@ -161,7 +161,7 @@ return {
       return result
     }
 
-    /** 用 curl 获取文本内容(web 服务可能无可用 provider,shell + curl 始终可用)。 */
+    /** 用 curl 获取文本内容(web 服务可能无可用 provider,shell + curl 始终可用)。并发安全:每次使用唯一临时文件。 */
     async function curlText(url, maxBytes) {
       const fs = ctx.get('fs')
       if (fs === undefined) throw new Error('文件系统服务不可用')
@@ -170,7 +170,7 @@ return {
       let tmp = null
       try { tmp = await tmpDir() } catch { /* ignore */ }
       const dir = (tmp || home || '/tmp') + '/dsh-themes/curl'
-      const out = dir + '/out.bin'
+      const out = dir + '/out-' + Math.random().toString(36).slice(2) + '.bin'
       await runShell('mkdir -p "' + dir + '"')
       await runShell('curl -fsSL --max-filesize ' + maxBytes + ' -o "' + out + '" "' + url + '"')
       try {
@@ -181,7 +181,7 @@ return {
       }
     }
 
-    // ---- search Open VSX for theme extensions (shell + curl) ----
+    // ---- search Open VSX for theme extensions (shell + curl;按类别过滤非主题扩展) ----
     harness.handle('search-open-vsx', async (args) => {
       const query = args && typeof args.query === 'string' ? args.query.trim() : ''
       if (!query) return { ok: false, error: '请输入搜索关键词' }
@@ -190,7 +190,7 @@ return {
         const text = await curlText(url, 262144)
         const data = JSON.parse(text)
         const exts = Array.isArray(data.extensions) ? data.extensions : []
-        const list = exts.map((e) => ({
+        const base = exts.map((e) => ({
           namespace: String(e.namespace || ''),
           name: String(e.name || ''),
           displayName: String(e.displayName || e.name || ''),
@@ -198,7 +198,39 @@ return {
           downloadCount: Number(e.downloadCount) || 0,
           downloadUrl: e.files && typeof e.files.download === 'string' ? e.files.download : null,
         })).filter((e) => e.namespace && e.name && e.downloadUrl)
-        return { ok: true, list }
+
+        // 详情 API:过滤非 Themes 类扩展,并统计其贡献的颜色主题数量
+        const kept = []
+        let idx = 0
+        const fetchDetail = async (entry) => {
+          let detail = null
+          for (let attempt = 0; attempt < 2 && detail === null; attempt += 1) {
+            try {
+              detail = JSON.parse(await curlText('https://open-vsx.org/api/' + encodeURIComponent(entry.namespace) + '/' + encodeURIComponent(entry.name), 131072))
+            } catch { /* retry once */ }
+          }
+          if (detail === null) { kept.push({ ...entry, themeCount: -1 }); return }
+          const cats = Array.isArray(detail.categories) ? detail.categories : []
+          if (!cats.some((c) => /theme/i.test(String(c)))) return // 非主题类扩展,过滤
+          let themeCount = 0
+          try {
+            if (detail.files && typeof detail.files.manifest === 'string') {
+              const manifest = JSON.parse(await curlText(detail.files.manifest, 131072))
+              const contrib = manifest.contributes && manifest.contributes.themes
+              themeCount = Array.isArray(contrib) ? contrib.length : 0
+            }
+          } catch { /* themeCount 保持 0 */ }
+          kept.push({ ...entry, themeCount })
+        }
+        const workers = Math.min(5, base.length)
+        await Promise.all(Array.from({ length: workers }, async () => {
+          while (idx < base.length) {
+            const entry = base[idx]
+            idx += 1
+            await fetchDetail(entry)
+          }
+        }))
+        return { ok: true, list: kept, filtered: base.length - kept.length }
       } catch (e) {
         return { ok: false, error: '搜索失败:' + ((e && e.message) || String(e)) }
       }

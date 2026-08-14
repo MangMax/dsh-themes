@@ -402,7 +402,7 @@ return {
           '--dsw-specific-bubble-highlight': d['--dsw-specific-bubble-highlight'],
         }
       }
-      return { light: buildTokens('light'), dark: buildTokens('dark') }
+      return { light: buildTokens('light'), dark: buildTokens('dark'), appearance }
     }
 
     // ---- 调色板目录 ----
@@ -604,7 +604,8 @@ return {
       store.emit()
     }
 
-    function importVsCodeTheme(text, sourceName) {
+    /** 解析单个 VS Code 主题文件为导入条目(不写入库)。 */
+    function buildImportedEntry(text, sourceName) {
       let raw
       try { raw = JSON.parse(text) } catch (e) { throw new Error('JSON 解析失败:' + ((e && e.message) || String(e))) }
       const tokens = parseVsCodeTheme(raw)
@@ -616,12 +617,65 @@ return {
       }
       if (!label && sourceName) label = humanizeName(String(sourceName).replace(/\.json$/i, '').replace(/[#?].*$/, ''))
       label = (label || 'VS Code 主题').slice(0, 40)
+      return { label, appearance: tokens.appearance, light: tokens.light, dark: tokens.dark }
+    }
+
+    /** 生成唯一 id 并写入库。 */
+    function pushImportedPalette(label, light, dark) {
       const base = slugify(label)
       let id = 'vsc-' + base
       let n = 2
       while (store.custom.some((p) => p.id === id)) id = 'vsc-' + base + '-' + n++
-      const palette = { id, label, light: tokens.light, dark: tokens.dark, imported: true }
+      const palette = { id, label, light, dark, imported: true }
       store.custom.push(palette)
+      return palette
+    }
+
+    /** 明暗变体配对(参考 t3code pairVsCodeThemes):去掉 label 中的 light/dark 词后同名的一对合并为一个双模式主题。 */
+    function stripAppearance(label) {
+      return label.replace(/\b(?:light|dark)\b/gi, ' ').replace(/\s+/g, ' ').trim()
+    }
+
+    function pairImportedEntries(entries) {
+      const groups = new Map()
+      const result = []
+      for (const e of entries) {
+        const key = stripAppearance(e.sourceLabel)
+        if (key && key !== e.sourceLabel) {
+          if (!groups.has(key)) groups.set(key, { light: [], dark: [] })
+          groups.get(key)[e.appearance].push(e)
+        } else {
+          result.push(e)
+        }
+      }
+      for (const [key, group] of groups) {
+        if (group.light.length === 1 && group.dark.length === 1) {
+          result.push({ label: key, light: group.light[0].light, dark: group.dark[0].dark })
+        } else {
+          for (const e of [...group.light, ...group.dark]) result.push(e)
+        }
+      }
+      return result
+    }
+
+    /** 批量导入(同一扩展):逐个解析后按明暗配对,统一写入并应用第一个。 */
+    function importBatchThemes(results) {
+      const entries = []
+      for (const r of results) {
+        try {
+          entries.push({ ...buildImportedEntry(r.text, r.label), sourceLabel: r.label || '' })
+        } catch { /* 跳过无法解析的文件 */ }
+      }
+      if (entries.length === 0) throw new Error('没有可导入的主题文件')
+      const paired = pairImportedEntries(entries)
+      const palettes = paired.map((p) => pushImportedPalette(p.label, p.light, p.dark))
+      applyPalette(palettes[0])
+      return '已导入 ' + palettes.length + ' 个主题(含 ' + (entries.length - palettes.length) + ' 个明暗配对)'
+    }
+
+    function importVsCodeTheme(text, sourceName) {
+      const entry = buildImportedEntry(text, sourceName)
+      const palette = pushImportedPalette(entry.label, entry.light, entry.dark)
       applyPalette(palette)
       return palette
     }
@@ -695,6 +749,7 @@ return {
       const [message, setMessage] = React.useState(null)
       const [searchQuery, setSearchQuery] = React.useState('')
       const [searchResults, setSearchResults] = React.useState(null)
+      const [searchNote, setSearchNote] = React.useState('')
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
@@ -776,7 +831,8 @@ return {
           const res = await host.call('search-open-vsx', { query: searchQuery.trim() })
           if (res && res.ok) {
             setSearchResults(res.list || [])
-            if ((res.list || []).length === 0) setMessage({ kind: 'error', text: '没有找到匹配的扩展' })
+            setSearchNote(res.filtered > 0 ? '已过滤 ' + res.filtered + ' 个非主题扩展' : '')
+            if ((res.list || []).length === 0) setMessage({ kind: 'error', text: '没有找到匹配的主题扩展' })
           } else {
             setMessage({ kind: 'error', text: (res && res.error) || '搜索失败' })
           }
@@ -817,6 +873,35 @@ return {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
         }
         setBusy('')
+      }
+
+      /** 批量导入扩展的全部主题,明暗变体自动配对。 */
+      const importAllThemes = async (ext) => {
+        setBusy('all-' + ext.name)
+        setMessage(null)
+        try {
+          const results = []
+          for (const t of ext.themes) {
+            const res = await host.call('read-theme-file', { path: t.path })
+            if (res && res.ok) results.push({ text: res.text, label: t.label })
+          }
+          if (results.length === 0) {
+            setMessage({ kind: 'error', text: '没有可读取的主题文件' })
+            setBusy('')
+            return
+          }
+          const summary = importBatchThemes(results)
+          setMessage({ kind: 'ok', text: summary })
+        } catch (e) {
+          setMessage({ kind: 'error', text: '导入失败:' + String((e && e.message) || e) })
+        }
+        setBusy('')
+      }
+
+      const themeCountText = (ext) => {
+        if (ext.themeCount === -1) return ''
+        if (ext.themeCount === 0) return ' · 无颜色主题'
+        return ' · 含 ' + ext.themeCount + ' 个颜色主题'
       }
 
       // ---- 渲染 ----
@@ -946,6 +1031,7 @@ return {
               busy === 'search' ? '搜索中…' : '搜索'
             )
           ),
+          searchNote ? React.createElement('div', { className: 'dsth-sub' }, searchNote) : null,
           searchResults && searchResults.length > 0
             ? React.createElement('div', { className: 'dsth-list' },
                 searchResults.map((ext) => React.createElement('div', { key: ext.namespace + '.' + ext.name, className: 'dsth-listitem dsth-listitem-col' },
@@ -953,7 +1039,7 @@ return {
                     React.createElement('div', { className: 'dsth-listitem-main' },
                       React.createElement('span', { className: 'dsth-listitem-name' }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
                       React.createElement('span', { className: 'dsth-listitem-path' },
-                        'v' + ext.version + ' · ' + fmtCount(ext.downloadCount) + ' 次下载' + (ext.installedVersion ? ' · 已获取 v' + ext.installedVersion : '')
+                        'v' + ext.version + ' · ' + fmtCount(ext.downloadCount) + ' 次下载' + themeCountText(ext) + (ext.installedVersion ? ' · 已获取 v' + ext.installedVersion : '')
                       )
                     ),
                     React.createElement('button', {
@@ -964,6 +1050,14 @@ return {
                   ),
                   ext.themes && ext.themes.length > 0
                     ? React.createElement('div', { className: 'dsth-list' },
+                        React.createElement('div', { className: 'dsth-row' },
+                          React.createElement('span', { className: 'dsth-sub' }, '明暗变体将自动配对为一个主题'),
+                          React.createElement('button', {
+                            className: 'dsth-btn',
+                            disabled: busy !== '',
+                            onClick: () => importAllThemes(ext),
+                          }, busy === 'all-' + ext.name ? '导入中…' : '全部导入')
+                        ),
                         ext.themes.map((t) => React.createElement('div', { key: t.path, className: 'dsth-listitem' },
                           React.createElement('div', { className: 'dsth-listitem-main' },
                             React.createElement('span', { className: 'dsth-listitem-name' }, t.label),
