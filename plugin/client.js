@@ -668,7 +668,7 @@ return {
         '.dsth-del:hover{background:var(--dsw-alias-interactive-bg-hover-danger)}' +
         '.dsth-foot{display:flex;align-items:center;gap:12px;padding-top:6px}' +
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
-        '.dsth-select{flex:none;min-width:150px}' +
+        '.dsth-select{flex:none;min-width:150px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220%200%2012%2012%22 fill=%22none%22%3E%3Cpath d=%22M3%204.5L6%207.5L9%204.5%22 stroke=%22%2381858C%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E");background-position:right 8px center;background-repeat:no-repeat;background-size:12px 12px;padding-right:24px;cursor:pointer}' +
         '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
         '.dsth-pair{display:flex;gap:8px;align-items:center}' +
         '.dsth-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}'

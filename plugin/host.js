@@ -3,8 +3,8 @@
 // 提供六个 Package-private RPC,供 Client 半区调用:
 //   scan-vscode-themes  扫描本地 VS Code / Cursor 扩展目录中的主题文件
 //   read-theme-file     读取单个主题 JSON 文件
-//   fetch-theme-url     通过 DSH web 服务获取原始主题 JSON URL
-//   search-open-vsx     搜索 Open VSX 主题扩展
+//   fetch-theme-url     获取原始主题 JSON URL(经 shell + curl,不依赖 web 服务 provider)
+//   search-open-vsx     搜索 Open VSX 主题扩展(经 shell + curl)
 //   install-open-vsx    下载 VSIX、解压并列出贡献的主题(依赖 curl/unzip)
 //   persist-themes      持久化主题库到 ~/.dsh/dsh-themes.json
 //   load-themes         读取持久化的主题库
@@ -122,19 +122,13 @@ return {
       }
     })
 
-    // ---- fetch a raw theme JSON url ----
+    // ---- fetch a raw theme JSON url (shell + curl;web 服务可能无可用 provider) ----
     harness.handle('fetch-theme-url', async (args) => {
-      const web = ctx.get('web')
-      if (web === undefined) return { ok: false, error: '网络服务不可用' }
       const url = args && typeof args.url === 'string' ? args.url : ''
       if (!/^https?:\/\//i.test(url)) return { ok: false, error: '仅支持 http(s) URL' }
       try {
-        const result = await web.fetch({ url })
-        if (result.statusCode < 200 || result.statusCode >= 300) return { ok: false, error: 'HTTP ' + result.statusCode }
-        const content = result.body && (result.body.kind === 'text' || result.body.kind === 'html') ? result.body.content : null
-        if (content === null) return { ok: false, error: '响应不是文本内容' }
-        if (content.length > 512 * 1024) return { ok: false, error: '内容超过 512KB 限制' }
-        return { ok: true, text: content }
+        const text = await curlText(url, 524288)
+        return { ok: true, text }
       } catch (e) {
         return { ok: false, error: '获取失败:' + ((e && e.message) || String(e)) }
       }
@@ -167,19 +161,34 @@ return {
       return result
     }
 
-    // ---- search Open VSX for theme extensions ----
+    /** 用 curl 获取文本内容(web 服务可能无可用 provider,shell + curl 始终可用)。 */
+    async function curlText(url, maxBytes) {
+      const fs = ctx.get('fs')
+      if (fs === undefined) throw new Error('文件系统服务不可用')
+      let home = null
+      try { home = await homeDir() } catch { /* ignore */ }
+      let tmp = null
+      try { tmp = await tmpDir() } catch { /* ignore */ }
+      const dir = (tmp || home || '/tmp') + '/dsh-themes/curl'
+      const out = dir + '/out.bin'
+      await runShell('mkdir -p "' + dir + '"')
+      await runShell('curl -fsSL --max-filesize ' + maxBytes + ' -o "' + out + '" "' + url + '"')
+      try {
+        const target = await fs.resolve(out)
+        return await fs.readText(target)
+      } finally {
+        await runShell('rm -f "' + out + '"').catch(() => {})
+      }
+    }
+
+    // ---- search Open VSX for theme extensions (shell + curl) ----
     harness.handle('search-open-vsx', async (args) => {
-      const web = ctx.get('web')
-      if (web === undefined) return { ok: false, error: '网络服务不可用' }
       const query = args && typeof args.query === 'string' ? args.query.trim() : ''
       if (!query) return { ok: false, error: '请输入搜索关键词' }
       try {
         const url = 'https://open-vsx.org/api/-/search?query=' + encodeURIComponent(query) + '&size=20&sortBy=downloadCount'
-        const result = await web.fetch({ url })
-        if (result.statusCode < 200 || result.statusCode >= 300) return { ok: false, error: 'HTTP ' + result.statusCode }
-        const content = result.body && (result.body.kind === 'text' || result.body.kind === 'html') ? result.body.content : null
-        if (content === null) return { ok: false, error: '响应不是文本内容' }
-        const data = JSON.parse(content)
+        const text = await curlText(url, 262144)
+        const data = JSON.parse(text)
         const exts = Array.isArray(data.extensions) ? data.extensions : []
         const list = exts.map((e) => ({
           namespace: String(e.namespace || ''),
