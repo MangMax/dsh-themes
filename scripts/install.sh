@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.1.0"
+PKG_VER="0.1.1"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
 echo "==> [1/4] vp pack 构建"
@@ -58,8 +58,9 @@ cat > "$BUILD_DIR/package.json" <<EOF
   "description": "DSH 外观与主题插件:内置调色板、Open VSX 搜索导入、颜色参数编辑器、明暗独立归属",
   "type": "module",
   "main": "lib/index.js",
-  "files": ["lib", "cordis.patch.yml"],
+  "files": ["lib", "cordis.patch.yml", "README.md"],
   "license": "MIT",
+  "keywords": ["dsh", "deepseek-harness", "plugin", "theme", "themes", "color", "palette", "appearance"],
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
@@ -68,6 +69,36 @@ cat > "$BUILD_DIR/package.json" <<EOF
     }
   }
 }
+EOF
+
+# 包 README
+cat > "$BUILD_DIR/README.md" <<'EOF'
+# dsh-themes
+
+DSH(DeepSeek Harness)外观与主题插件。
+
+## 安装
+
+```bash
+dsh plugin --profile web add dsh-themes
+```
+
+重启 dsh web 后在 **设置 → 主题** 中使用。
+
+## 功能
+
+- 内置调色板(DSH 默认 / t3 chat / Grove / Ocean / Ember / Iris),明/暗独立归属,缺省一侧由默认主题兜底
+- Open VSX 搜索一键导入主题扩展;VS Code 扩展 / URL / 粘贴 JSON 导入
+- 颜色详细参数编辑器:明暗切换 + 分组 token 色块与 hex 编辑,即时生效,支持改名与重置
+- 主题持久化(`~/.dsh/dsh-themes.json`)
+
+## 开发
+
+源码: https://github.com/MangMax/dsh-themes
+
+```bash
+bash scripts/install.sh    # 构建 + 组装 + 安装
+```
 EOF
 
 echo "==> [3/4] npm pack"
