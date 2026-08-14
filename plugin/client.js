@@ -188,6 +188,16 @@ return {
       const border = mixRgb(mixRgb(canvas, accent, dark ? 0.22 : 0.1), text, 0.1)
       const input = mixRgb(mixRgb(canvas, accent, dark ? 0.3 : 0.14), text, dark ? 0.14 : 0.13)
       const status = statusColors(canvas)
+      // ---- 品牌色:由 accent 派生(发送按钮、tab 选中、侧栏选中、气泡、状态动画) ----
+      const bubble = mixRgb(canvas, accent, dark ? 0.14 : 0.08)
+      const bubbleHighlight = mixRgb(canvas, accent, dark ? 0.22 : 0.14)
+      const businessTertiary = mixRgb(canvas, accent, dark ? 0.2 : 0.1)
+      const navActive = mixRgb(sidebar, accent, dark ? 0.24 : 0.18)
+      const navActiveAccent = mixRgb(sidebar, accent, dark ? 0.16 : 0.12)
+      const accentForeground = readableForeground(accent)
+      const hoverMix = accentForeground === LIGHT_FG || accentForeground === WHITE_FG ? BLACK_FG : WHITE_FG
+      const buttonHover = mixRgb(accent, hoverMix, 0.12)
+      const shimmerLight = mixRgb(accent, WHITE_FG, 0.65)
       return {
         '--dsw-alias-bg-base': rgbToHex(canvas),
         '--dsw-alias-bg-layer-1': rgbToHex(canvas),
@@ -202,6 +212,16 @@ return {
         '--dsw-alias-state-warn-primary': status.warning,
         '--dsw-alias-state-success-primary': status.success,
         '--dsw-specific-sidebar-fill': rgbToHex(sidebar),
+        '--dsw-alias-button-info-fill': rgbToHex(accent),
+        '--dsw-alias-button-info-hover': rgbToHex(buttonHover),
+        '--dsw-alias-state-business-primary': rgbToHex(accent),
+        '--dsw-alias-state-business-tertiary': rgbToHex(businessTertiary),
+        '--dsw-specific-sidebar-nav-item-active': rgbToHex(navActive),
+        '--dsw-specific-sidebar-nav-item-active-accent': rgbToHex(navActiveAccent),
+        '--dsw-static-deepseek-500': rgbToHex(accent),
+        '--dsw-static-deepseek-200': rgbToHex(shimmerLight),
+        '--dsw-specific-bubble': rgbToHex(bubble),
+        '--dsw-specific-bubble-highlight': rgbToHex(bubbleHighlight),
       }
     }
 
@@ -223,6 +243,16 @@ return {
             '--dsw-alias-state-warn-primary': '#f59e0b',
             '--dsw-alias-state-success-primary': '#4ed17e',
             '--dsw-specific-sidebar-fill': '#171018',
+            '--dsw-alias-button-info-fill': '#a3004c',
+            '--dsw-alias-button-info-hover': '#a2004c',
+            '--dsw-alias-state-business-primary': '#fbd0e8',
+            '--dsw-alias-state-business-tertiary': '#37152b',
+            '--dsw-specific-sidebar-nav-item-active': '#261922',
+            '--dsw-specific-sidebar-nav-item-active-accent': '#463753',
+            '--dsw-static-deepseek-500': '#a3004c',
+            '--dsw-static-deepseek-200': '#a36691',
+            '--dsw-specific-bubble': '#2b2431',
+            '--dsw-specific-bubble-highlight': '#362d3d',
           }
         : {
             '--dsw-alias-bg-base': '#fdf7fd',
@@ -238,6 +268,16 @@ return {
             '--dsw-alias-state-warn-primary': '#f59e0b',
             '--dsw-alias-state-success-primary': '#22c55e',
             '--dsw-specific-sidebar-fill': '#f2e1f4',
+            '--dsw-alias-button-info-fill': '#db2777',
+            '--dsw-alias-button-info-hover': '#c12269',
+            '--dsw-alias-state-business-primary': '#db2777',
+            '--dsw-alias-state-business-tertiary': '#f3e6f5',
+            '--dsw-specific-sidebar-nav-item-active': '#f3e6f5',
+            '--dsw-specific-sidebar-nav-item-active-accent': '#eccfe3',
+            '--dsw-static-deepseek-500': '#db2777',
+            '--dsw-static-deepseek-200': '#f2b3cf',
+            '--dsw-specific-bubble': '#f7def2',
+            '--dsw-specific-bubble-highlight': '#f1c4e6',
           }
     }
 
@@ -350,6 +390,16 @@ return {
           '--dsw-alias-state-warn-primary': readableOn(canvasHex, d['--dsw-alias-state-warn-primary'], 'editorWarning.foreground'),
           '--dsw-alias-state-success-primary': d['--dsw-alias-state-success-primary'],
           '--dsw-specific-sidebar-fill': solidOver(canvasRgb, 'sideBar.background', 'activityBar.background') || d['--dsw-specific-sidebar-fill'],
+          '--dsw-alias-button-info-fill': d['--dsw-alias-button-info-fill'],
+          '--dsw-alias-button-info-hover': d['--dsw-alias-button-info-hover'],
+          '--dsw-alias-state-business-primary': d['--dsw-alias-state-business-primary'],
+          '--dsw-alias-state-business-tertiary': d['--dsw-alias-state-business-tertiary'],
+          '--dsw-specific-sidebar-nav-item-active': d['--dsw-specific-sidebar-nav-item-active'],
+          '--dsw-specific-sidebar-nav-item-active-accent': d['--dsw-specific-sidebar-nav-item-active-accent'],
+          '--dsw-static-deepseek-500': d['--dsw-static-deepseek-500'],
+          '--dsw-static-deepseek-200': d['--dsw-static-deepseek-200'],
+          '--dsw-specific-bubble': d['--dsw-specific-bubble'],
+          '--dsw-specific-bubble-highlight': d['--dsw-specific-bubble-highlight'],
         }
       }
       return { light: buildTokens('light'), dark: buildTokens('dark') }
@@ -363,9 +413,23 @@ return {
       '--dsw-alias-label-primary', '--dsw-alias-label-secondary',
       '--dsw-alias-state-error-primary', '--dsw-alias-state-warn-primary', '--dsw-alias-state-success-primary',
       '--dsw-specific-sidebar-fill',
+      '--dsw-alias-button-info-fill', '--dsw-alias-button-info-hover',
+      '--dsw-alias-state-business-primary', '--dsw-alias-state-business-tertiary',
+      '--dsw-specific-sidebar-nav-item-active', '--dsw-specific-sidebar-nav-item-active-accent',
+      '--dsw-static-deepseek-500', '--dsw-static-deepseek-200',
+      '--dsw-specific-bubble', '--dsw-specific-bubble-highlight',
     ]
 
-    /** DSH 内置外观的 13 个 token 默认值(明暗混合缺半时的兜底)。 */
+    /** 旧版主题库中的核心 token 子集(升级兼容:仅校验这些,缺失的品牌 token 用默认值补齐)。 */
+    const CORE_TOKEN_NAMES = [
+      '--dsw-alias-bg-base', '--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2', '--dsw-alias-bg-overlay',
+      '--dsw-alias-border-l1', '--dsw-alias-border-l2', '--dsw-alias-brand-primary',
+      '--dsw-alias-label-primary', '--dsw-alias-label-secondary',
+      '--dsw-alias-state-error-primary', '--dsw-alias-state-warn-primary', '--dsw-alias-state-success-primary',
+      '--dsw-specific-sidebar-fill',
+    ]
+
+    /** DSH 内置外观的 token 默认值(明暗混合缺半与旧库补齐时的兜底)。 */
     const DEFAULT_PALETTE = {
       light: {
         '--dsw-alias-bg-base': '#ffffff',
@@ -381,6 +445,16 @@ return {
         '--dsw-alias-state-warn-primary': '#f59e0b',
         '--dsw-alias-state-success-primary': '#22c55e',
         '--dsw-specific-sidebar-fill': '#f9fafb',
+        '--dsw-alias-button-info-fill': '#4176e6',
+        '--dsw-alias-button-info-hover': '#679efe',
+        '--dsw-alias-state-business-primary': '#4176e6',
+        '--dsw-alias-state-business-tertiary': '#e4edfd',
+        '--dsw-specific-sidebar-nav-item-active': '#ebedf2',
+        '--dsw-specific-sidebar-nav-item-active-accent': '#e4edfd',
+        '--dsw-static-deepseek-500': '#4176e6',
+        '--dsw-static-deepseek-200': '#d3e2ff',
+        '--dsw-specific-bubble': '#edf3fe',
+        '--dsw-specific-bubble-highlight': '#d3e2ff',
       },
       dark: {
         '--dsw-alias-bg-base': '#151517',
@@ -396,6 +470,16 @@ return {
         '--dsw-alias-state-warn-primary': '#f59e0b',
         '--dsw-alias-state-success-primary': '#22c55e',
         '--dsw-specific-sidebar-fill': '#1b1b1c',
+        '--dsw-alias-button-info-fill': '#679efe',
+        '--dsw-alias-button-info-hover': '#4176e6',
+        '--dsw-alias-state-business-primary': '#679efe',
+        '--dsw-alias-state-business-tertiary': '#34415b',
+        '--dsw-specific-sidebar-nav-item-active': '#43454a',
+        '--dsw-specific-sidebar-nav-item-active-accent': '#353536',
+        '--dsw-static-deepseek-500': '#4176e6',
+        '--dsw-static-deepseek-200': '#d3e2ff',
+        '--dsw-specific-bubble': '#2c2c2e',
+        '--dsw-specific-bubble-highlight': '#43454a',
       },
     }
 
@@ -488,7 +572,17 @@ return {
     function isValidPalette(p) {
       return !!p && typeof p === 'object' && typeof p.id === 'string' && typeof p.label === 'string' &&
         p.light && typeof p.light === 'object' && p.dark && typeof p.dark === 'object' &&
-        TOKEN_NAMES.every((t) => typeof p.light[t] === 'string' && typeof p.dark[t] === 'string')
+        CORE_TOKEN_NAMES.every((t) => typeof p.light[t] === 'string' && typeof p.dark[t] === 'string')
+    }
+
+    /** 补齐缺失的品牌 token(旧版库升级兼容),返回新对象。 */
+    function fillPalette(p) {
+      const out = { id: p.id, label: p.label, light: {}, dark: {} }
+      for (const t of TOKEN_NAMES) {
+        out.light[t] = typeof p.light[t] === 'string' ? p.light[t] : DEFAULT_PALETTE.light[t]
+        out.dark[t] = typeof p.dark[t] === 'string' ? p.dark[t] : DEFAULT_PALETTE.dark[t]
+      }
+      return out
     }
 
     /** 从持久化存储恢复主题库(异步、幂等)。 */
@@ -497,7 +591,7 @@ return {
         const res = await host.call('load-themes', {})
         if (res && res.ok && res.data) {
           const d = res.data
-          if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p))
+          if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p)).map((p) => fillPalette(p))
           if (typeof d.current === 'string' && paletteById(d.current)) store.current = d.current
           if (d.mixed && typeof d.mixed === 'object') {
             if (typeof d.mixed.light === 'string' && paletteById(d.mixed.light)) store.mixed.light = d.mixed.light
@@ -587,7 +681,7 @@ return {
 
     // ---- 设置页 ----
 
-    const SWATCH_TOKENS = ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-2', '--dsw-alias-brand-primary', '--dsw-alias-label-primary', '--dsw-specific-sidebar-fill']
+    const SWATCH_TOKENS = ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-2', '--dsw-alias-brand-primary', '--dsw-alias-state-business-primary', '--dsw-alias-label-primary', '--dsw-specific-sidebar-fill']
     const MODE_LABELS = { system: '跟随系统', light: '浅色', dark: '深色' }
 
     function ThemesPage() {
