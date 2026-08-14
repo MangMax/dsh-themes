@@ -56,4 +56,11 @@ export const STYLES_CSS =
         '.dsth-vlabel{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;flex:none;width:28px}' +
 
         '.dsth-pair{display:flex;gap:8px;align-items:center}' +
-        '.dsth-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
+        '.dsth-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}' +
+        '.dsth-editor-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap}' +
+        '.dsth-edit-btn{margin-left:auto}' +
+        '.dsth-editrow{display:flex;gap:8px;align-items:center;padding:6px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:8px;background:var(--dsw-alias-bg-layer-1)}' +
+        '.dsth-editlabel{color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;flex:none;width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+        '.dsth-editval{color:var(--dsw-alias-label-caption);font-size:10px;line-height:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ds-font-family-code)}' +
+        '.dsth-editcolor{flex:none;width:28px;height:28px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;cursor:pointer}' +
+        '.dsth-edithex{flex:none;width:110px;font-family:var(--ds-font-family-code);font-size:11px}'

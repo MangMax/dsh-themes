@@ -219,6 +219,36 @@ export default {
     const SWATCH_TOKENS = ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-2', '--dsw-alias-brand-primary', '--dsw-alias-state-business-primary', '--dsw-alias-label-primary', '--dsw-specific-sidebar-fill']
     const MODE_LABELS = { system: '跟随系统', light: '浅色', dark: '深色' }
 
+    /** 颜色详细参数编辑器(参照 t3code ThemeEditorPanel 的分组结构):按语义分组列出 token。 */
+    const EDITOR_GROUPS = [
+      { id: 'main', title: '主要颜色', tokens: [
+        ['--dsw-alias-bg-base', '画布背景'],
+        ['--dsw-alias-bg-layer-2', '表面'],
+        ['--dsw-alias-bg-overlay', '浮层'],
+        ['--dsw-alias-border-l1', '边框'],
+        ['--dsw-alias-label-primary', '文字主色'],
+        ['--dsw-alias-label-secondary', '文字次级'],
+        ['--dsw-specific-sidebar-fill', '侧栏'],
+        ['--dsw-alias-brand-primary', '品牌主色'],
+        ['--dsw-alias-button-info-fill', '操作按钮'],
+        ['--dsw-alias-state-business-primary', '业务主色'],
+      ] },
+      { id: 'status', title: '状态颜色', tokens: [
+        ['--dsw-alias-state-error-primary', '错误'],
+        ['--dsw-alias-state-warn-primary', '警告'],
+        ['--dsw-alias-state-success-primary', '成功'],
+        ['--dsw-static-deepseek-450', '运行中动画'],
+      ] },
+      { id: 'other', title: '其他', tokens: [
+        ['--dsw-specific-bubble', '气泡'],
+        ['--dsw-specific-bubble-highlight', '气泡高亮'],
+        ['--dsw-specific-sidebar-nav-item-active', '侧栏选中'],
+        ['--dsw-static-deepseek-500', '品牌深色'],
+        ['--dsw-static-deepseek-200', '品牌浅色'],
+      ] },
+    ]
+
+
     /** 明暗槽变体选择器:融合色球列表,选中放大,溢出时显示左右导航箭头,悬停显示变体名。 */
     function VariantRow({ palette, mode, variants }) {
       const ref = React.useRef(null)
@@ -301,6 +331,8 @@ export default {
       const [message, setMessage] = React.useState(null)
       const [searchQuery, setSearchQuery] = React.useState('')
       const [searchResults, setSearchResults] = React.useState(null)
+      const [editing, setEditing] = React.useState(null)
+      const [editMode, setEditMode] = React.useState('light')
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
@@ -453,6 +485,68 @@ export default {
         try { window.open(url, '_blank', 'noopener') } catch { /* ignore */ }
       }
 
+      /** 编辑内置主题时先复制为自定义主题,保证修改可持久化且不影响内置原型。 */
+      const openEditor = (palette) => {
+        let target = palette
+        if (PALETTES.includes(palette)) {
+          target = {
+            id: 'edit-' + palette.id,
+            label: palette.label + '(已修改)',
+            imported: true,
+            light: { ...palette.light },
+            dark: { ...palette.dark },
+            lightVariants: [{ label: '浅色', tokens: { ...palette.light } }],
+            darkVariants: [{ label: '深色', tokens: { ...palette.dark } }],
+          }
+          store.custom.push(target)
+        }
+        setEditing(target)
+        setEditMode('light')
+        applyPalette(target)
+      }
+
+      const setToken = (palette, mode, token, value) => {
+        if (typeof value !== 'string' || value === '') return
+        palette[mode][token] = value
+        applyLayers()
+        persist()
+      }
+
+      /** 二级页面:颜色详细参数编辑器(明暗切换 + 分组颜色字段,修改即时生效)。 */
+      const renderEditor = (palette) => React.createElement('div', { className: 'dsth-page' },
+        React.createElement('div', { className: 'dsth-editor-head' },
+          React.createElement('button', { className: 'dsth-btn', onClick: () => setEditing(null) }, '← 返回'),
+          React.createElement('span', { className: 'dsth-title' }, '调整颜色 · ' + palette.label),
+          ['light', 'dark'].map((m) => React.createElement('button', {
+            key: m,
+            className: 'dsth-modechip' + (editMode === m ? ' dsth-modechip-active' : ''),
+            onClick: () => setEditMode(m),
+          }, MODE_LABELS[m]))
+        ),
+        EDITOR_GROUPS.map((group) => React.createElement('div', { key: group.id, className: 'dsth-section' },
+          React.createElement('div', { className: 'dsth-section-title' }, group.title),
+          group.tokens.map(([token, label]) => {
+            const value = palette[editMode][token] || ''
+            const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : '#000000'
+            return React.createElement('div', { key: token, className: 'dsth-editrow' },
+              React.createElement('span', { className: 'dsth-editlabel' }, label),
+              React.createElement('span', { className: 'dsth-editval' }, token),
+              React.createElement('input', {
+                type: 'color',
+                className: 'dsth-editcolor',
+                value: hex,
+                onChange: (e) => setToken(palette, editMode, token, e.target.value),
+              }),
+              React.createElement('input', {
+                className: 'dsth-input dsth-edithex',
+                value: value,
+                onChange: (e) => setToken(palette, editMode, token, e.target.value),
+              })
+            )
+          })
+        ))
+      )
+
       const paletteBadge = (palette) => {
         if (store.current === palette.id) return '使用中'
         return null
@@ -477,10 +571,15 @@ export default {
       const renderVariantRow = (palette, mode, variants) =>
         React.createElement(VariantRow, { key: mode, palette, mode, variants })
 
+      const renderEditButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => openEditor(p) }, '修改')
+
       const renderCustomGrid = store.custom.length > 0
         ? React.createElement('div', { className: 'dsth-grid' },
             store.custom.map((p) => renderCard(p,
-              React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, '删除')
+              React.createElement('div', { className: 'dsth-actions' },
+                renderEditButton(p),
+                React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, '删除')
+              )
             ))
           )
         : null
@@ -501,6 +600,7 @@ export default {
           )
         : null
 
+      if (editing) return renderEditor(editing)
       return React.createElement('div', { className: 'dsth-page' },
         React.createElement('div', { className: 'dsth-title' }, '主题'),
         React.createElement('div', { className: 'dsth-section' },
@@ -589,7 +689,7 @@ export default {
 
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
-          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, null)))
+          React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, renderEditButton(p))))
         ),
 
         store.custom.length > 0
