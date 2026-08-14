@@ -246,6 +246,12 @@ return {
           version: String(e.version || ''),
           downloadCount: Number(e.downloadCount) || 0,
           downloadUrl: e.files && typeof e.files.download === 'string' ? e.files.download : null,
+          icon: e.files && typeof e.files.icon === 'string' ? e.files.icon : null,
+          author: typeof e.author === 'string' && e.author.trim() ? e.author.trim() : String(e.namespace || ''),
+          license: typeof e.license === 'string' && e.license.trim() ? e.license.trim() : '',
+          rating: Number(e.averageRating) || 0,
+          reviewCount: Number(e.reviewCount) || 0,
+          timestamp: typeof e.timestamp === 'string' ? e.timestamp : '',
         })).filter((e) => e.namespace && e.name && e.downloadUrl).slice(0, 10)
         return { ok: true, list }
       } catch (e) {
@@ -343,6 +349,26 @@ return {
         }
       } catch (e) {
         return { ok: false, error: '安装失败:' + ((e && e.message) || String(e)) }
+      }
+    })
+
+    // ---- fetch author/license for one Open VSX extension(搜索后异步补充,不阻塞搜索) ----
+    harness.handle('open-vsx-detail', async (args) => {
+      const namespace = args && typeof args.namespace === 'string' ? args.namespace : ''
+      const name = args && typeof args.name === 'string' ? args.name : ''
+      if (!namespace || !name) return { ok: false, error: '参数不完整' }
+      try {
+        const detail = JSON.parse(await curlText('https://open-vsx.org/api/' + encodeURIComponent(namespace) + '/' + encodeURIComponent(name), 131072))
+        let author = ''
+        if (typeof detail.author === 'string') author = detail.author.trim()
+        else if (detail.author && typeof detail.author === 'object' && typeof detail.author.name === 'string') author = detail.author.name.trim()
+        return {
+          ok: true,
+          author,
+          license: typeof detail.license === 'string' && detail.license.trim() ? detail.license.trim() : '',
+        }
+      } catch (e) {
+        return { ok: false, error: '详情获取失败:' + ((e && e.message) || String(e)) }
       }
     })
 

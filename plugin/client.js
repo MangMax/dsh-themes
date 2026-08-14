@@ -891,6 +891,8 @@ return {
         '.dsth-listitem{border:1px solid var(--dsw-alias-border-l1);border-radius:8px;padding:6px 10px;display:flex;gap:8px;align-items:center;font-size:12px;line-height:18px;background:var(--dsw-alias-bg-layer-1)}' +
         '.dsth-listitem-main{min-width:0;flex:1;display:flex;flex-direction:column}' +
         '.dsth-listitem-name{color:var(--dsw-alias-label-primary)}' +
+        '.dsth-searchitem{gap:10px}' +
+        '.dsth-ext-icon{width:28px;height:28px;border-radius:8px;flex:none;object-fit:cover}' +
         '.dsth-listitem-path{color:var(--dsw-alias-label-caption);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
         '.dsth-msg{padding:6px 10px;border-radius:8px;font-size:12px;line-height:18px}' +
         '.dsth-msg-ok{color:var(--dsw-alias-state-success-primary)}' +
@@ -1080,6 +1082,20 @@ return {
 
       const fmtCount = (n) => n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : String(n)
 
+      const fmtDate = (iso) => {
+        if (!iso) return ''
+        const d = new Date(iso)
+        if (isNaN(d.getTime())) return ''
+        const days = Math.floor((Date.now() - d.getTime()) / 86400000)
+        if (days <= 0) return '今天'
+        if (days === 1) return '昨天'
+        if (days < 30) return days + ' 天前'
+        const p = (n) => String(n).padStart(2, '0')
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
+      }
+
+      const fmtRating = (r, count) => r > 0 ? '★ ' + r.toFixed(1) + (count > 0 ? ' (' + count + ')' : '') : ''
+
       const runSearch = async () => {
         if (!searchQuery.trim()) { setMessage({ kind: 'error', text: '请输入搜索关键词' }); return }
         setBusy('search')
@@ -1087,8 +1103,17 @@ return {
         try {
           const res = await host.call('search-open-vsx', { query: searchQuery.trim() })
           if (res && res.ok) {
-            setSearchResults(res.list || [])
-            if ((res.list || []).length === 0) setMessage({ kind: 'error', text: '没有找到匹配的主题扩展' })
+            const list = res.list || []
+            setSearchResults(list)
+            // 作者/许可证需详情接口,后台异步补充,不阻塞搜索展示
+            if (list.length > 0) {
+              Promise.all(list.map((ext) => host.call('open-vsx-detail', { namespace: ext.namespace, name: ext.name }).then((d) => {
+                if (d && d.ok) {
+                  setSearchResults((prev) => prev.map((e) => e === ext ? { ...e, author: d.author || e.author, license: d.license || e.license } : e))
+                }
+              }).catch(() => {})))
+            }
+            if (list.length === 0) setMessage({ kind: 'error', text: '没有找到匹配的主题扩展' })
           } else {
             setMessage({ kind: 'error', text: (res && res.error) || '搜索失败' })
           }
@@ -1228,19 +1253,35 @@ return {
           React.createElement('div', { className: 'dsth-sub' }, '点击「导入」一步完成下载、解析与聚合导入;重复导入走缓存,秒开。'),
           searchResults && searchResults.length > 0
             ? React.createElement('div', { className: 'dsth-list' },
-                searchResults.map((ext) => React.createElement('div', { key: ext.namespace + '.' + ext.name, className: 'dsth-listitem' },
-                  React.createElement('div', { className: 'dsth-listitem-main' },
-                    React.createElement('span', { className: 'dsth-listitem-name' }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
-                    React.createElement('span', { className: 'dsth-listitem-path' },
-                      'v' + ext.version + ' · ' + fmtCount(ext.downloadCount) + ' 次下载'
-                    )
-                  ),
+                searchResults.map((ext) => {
+                  const meta = [
+                    '作者 ' + ext.author,
+                    ext.license ? ext.license : '',
+                    'v' + ext.version,
+                    fmtCount(ext.downloadCount) + ' 次下载',
+                    fmtRating(ext.rating, ext.reviewCount),
+                    ext.timestamp ? '更新 ' + fmtDate(ext.timestamp) : '',
+                  ].filter(Boolean).join(' · ')
+                  return React.createElement('div', { key: ext.namespace + '.' + ext.name, className: 'dsth-listitem dsth-searchitem' },
+                    ext.icon
+                      ? React.createElement('img', {
+                          className: 'dsth-ext-icon',
+                          src: ext.icon,
+                          alt: '',
+                          onError: (e) => { e.target.style.display = 'none' },
+                        })
+                      : null,
+                    React.createElement('div', { className: 'dsth-listitem-main' },
+                      React.createElement('span', { className: 'dsth-listitem-name' }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
+                      React.createElement('span', { className: 'dsth-listitem-path' }, meta)
+                    ),
                   React.createElement('button', {
                     className: 'dsth-btn',
                     disabled: busy !== '',
                     onClick: () => importExt(ext),
                   }, busy === 'import-' + ext.name ? '导入中…' : '导入')
-                ))
+                  )
+                })
               )
             : null
         ),
