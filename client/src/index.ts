@@ -650,7 +650,7 @@ export default {
     }
 
     slots.inject('settings.section', () => slots.register(
-      { name: 'settings.section', id: 'dsh-themes', order: 12, label: '🎨 主题' },
+      { name: 'settings.section', id: 'dsh-themes', order: 12, label: '主题' },
       () => React.createElement(ThemesPage)
     ))
 
