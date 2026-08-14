@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/hero.png" alt="dsh-themes hero" width="100%">
+</p>
+
 # dsh-themes
 
 English | [中文](README.md)
