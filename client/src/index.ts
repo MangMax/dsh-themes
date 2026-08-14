@@ -621,7 +621,7 @@ export default {
           className: 'dsth-card' + (badge ? ' dsth-selected' : ''),
         },
           React.createElement('div', { className: 'dsth-card-name', onClick: () => applyPalette(palette), title: '应用主题(保持当前外观模式)' },
-            palette.label,
+            React.createElement('span', { className: 'dsth-card-label', title: palette.label }, palette.label),
             badge ? React.createElement('span', { className: 'dsth-badge' }, badge) : null,
             extra || null
           ),

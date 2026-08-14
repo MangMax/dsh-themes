@@ -13,6 +13,7 @@ export const STYLES_CSS =
         '.dsth-card{border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}' +
         '.dsth-card.dsth-selected{border-color:var(--dsw-alias-brand-primary)}' +
         '.dsth-card-name{display:flex;align-items:center;justify-content:space-between;gap:8px;color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:20px;cursor:pointer}' +
+        '.dsth-card-label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
         '.dsth-badge{color:var(--dsw-alias-label-secondary);font-size:10px;font-weight:400}' +
         '.dsth-row{display:flex;gap:8px;align-items:center}' +
         '.dsth-input{box-sizing:border-box;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);border-radius:8px;padding:5px 10px;font-size:12px;line-height:18px;min-width:0;flex:1;font:inherit}' +
