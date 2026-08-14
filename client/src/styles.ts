@@ -41,7 +41,7 @@ export const STYLES_CSS =
         '.dsth-del:hover{background:var(--dsw-alias-interactive-bg-hover-danger)}' +
         '.dsth-foot{display:flex;align-items:center;gap:12px;padding-top:6px}' +
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
-        '.dsth-ball-slot{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center}' +
+        '.dsth-ball-slot{width:40px;height:40px;flex:none;display:flex;align-items:center;justify-content:center}' +
         '.dsth-ball{width:20px;height:20px;border-radius:50%;display:inline-block;cursor:pointer;border:none;padding:0;transition:width .15s ease,height .15s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
         '.dsth-ball-dark{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14),0 1px 2px rgba(0,0,0,0.18)}' +
         '.dsth-ball-active{width:32px;height:32px;outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}' +
@@ -63,4 +63,4 @@ export const STYLES_CSS =
         '.dsth-editlabel{color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;flex:none;width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
         '.dsth-editval{color:var(--dsw-alias-label-caption);font-size:10px;line-height:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ds-font-family-code)}' +
         '.dsth-editcolor{flex:none;width:28px;height:28px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;cursor:pointer}' +
-        '.dsth-edithex{flex:none;width:110px;font-family:var(--ds-font-family-code);font-size:11px}'
+        '.dsth-edithex{flex:none;width:110px;font-family:var(--ds-font-family-code);font-size:11px}.dsth-edit-name{flex:1;min-width:140px;max-width:280px;font-weight:600}'

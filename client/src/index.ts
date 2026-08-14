@@ -533,10 +533,21 @@ export default {
       }
 
       /** 二级页面:颜色详细参数编辑器(明暗切换 + 分组颜色字段,修改即时生效)。 */
+      const renamePalette = (palette, value) => {
+        palette.label = value
+        store.emit()
+        persist()
+      }
+
       const renderEditor = (palette) => React.createElement('div', { className: 'dsth-page' },
         React.createElement('div', { className: 'dsth-editor-head' },
           React.createElement('button', { className: 'dsth-btn', onClick: () => setEditing(null) }, '← 返回'),
-          React.createElement('span', { className: 'dsth-title' }, '调整颜色 · ' + palette.label),
+          React.createElement('input', {
+            className: 'dsth-input dsth-edit-name',
+            value: palette.label,
+            title: '主题名称(导入/复制主题可修改,内置主题仅副本可改)',
+            onChange: (e) => renamePalette(palette, e.target.value),
+          }),
           ['light', 'dark'].map((m) => React.createElement('button', {
             key: m,
             className: 'dsth-modechip' + (editMode === m ? ' dsth-modechip-active' : ''),
