@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/hero.svg" alt="dsh-themes hero" width="100%">
+  <img src="assets/hero.png" alt="dsh-themes hero" width="100%">
 </p>
 
 # dsh-themes
