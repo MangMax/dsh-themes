@@ -266,11 +266,11 @@ export default {
       return React.createElement('div', { className: 'dsth-vrow' },
         React.createElement('span', { className: 'dsth-vlabel' }, MODE_LABELS[mode]),
         React.createElement('button', {
-          className: 'dsth-nav' + (nav.left ? '' : ' dsth-nav-disabled'),
+          className: 'dsth-nav dsth-nav-l' + (nav.left ? '' : ' dsth-nav-disabled'),
           disabled: !nav.left,
           tabIndex: -1,
           onClick: () => scrollBy(-1),
-        }, '\u2039'),
+        }),
         React.createElement('div', { className: 'dsth-balls', ref, onScroll: updateNav },
           variants.map((v, i) => React.createElement('span', { key: v.label + i, className: 'dsth-ball-slot' },
             React.createElement('button', {
@@ -282,11 +282,11 @@ export default {
           ))
         ),
         React.createElement('button', {
-          className: 'dsth-nav' + (nav.right ? '' : ' dsth-nav-disabled'),
+          className: 'dsth-nav dsth-nav-r' + (nav.right ? '' : ' dsth-nav-disabled'),
           disabled: !nav.right,
           tabIndex: -1,
           onClick: () => scrollBy(1),
-        }, '\u203a')
+        })
       )
     }
 
@@ -301,7 +301,6 @@ export default {
       const [message, setMessage] = React.useState(null)
       const [searchQuery, setSearchQuery] = React.useState('')
       const [searchResults, setSearchResults] = React.useState(null)
-      const [tip, setTip] = React.useState(null)
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
@@ -454,14 +453,6 @@ export default {
         try { window.open(url, '_blank', 'noopener') } catch { /* ignore */ }
       }
 
-      const showTip = (e, ext) => {
-        const rect = e.currentTarget.getBoundingClientRect()
-        const w = typeof window !== 'undefined' ? window.innerWidth : 1200
-        const left = Math.min(rect.left, Math.max(8, w - 320))
-        setTip({ ext, x: left, y: rect.bottom + 6 })
-      }
-      const hideTip = () => setTip(null)
-
       const paletteBadge = (palette) => {
         if (store.current === palette.id) return '使用中'
         return null
@@ -572,8 +563,6 @@ export default {
                   return React.createElement('div', {
                     key: ext.namespace + '.' + ext.name,
                     className: 'dsth-listitem dsth-searchitem',
-                    onMouseEnter: (e) => showTip(e, ext),
-                    onMouseLeave: hideTip,
                   },
                     ext.icon
                       ? React.createElement('img', {
@@ -591,7 +580,18 @@ export default {
                         title: '打开扩展详情',
                         onClick: () => openLink(detailUrl),
                       }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
-                      React.createElement('span', { className: 'dsth-listitem-path' }, meta)
+                      ext.description
+                        ? React.createElement('span', { className: 'dsth-ext-desc' },
+                            ext.description.slice(0, 160) + (ext.description.length > 160 ? '…' : '')
+                          )
+                        : null,
+                      React.createElement('span', { className: 'dsth-listitem-path' }, meta),
+                      React.createElement('div', { className: 'dsth-ext-links' },
+                        React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(detailUrl) }, '扩展详情'),
+                        ext.repository
+                          ? React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(ext.repository) }, '主页/仓库')
+                          : null
+                      )
                     ),
                   React.createElement('button', {
                     className: 'dsth-btn',
@@ -643,35 +643,6 @@ export default {
 
         message ? React.createElement('div', { className: 'dsth-msg dsth-msg-' + message.kind }, message.text) : null,
 
-        tip
-          ? React.createElement('div', { className: 'dsth-tip', style: { left: tip.x, top: tip.y } },
-              React.createElement('div', { className: 'dsth-tip-head' },
-                tip.ext.icon
-                  ? React.createElement('img', { className: 'dsth-tip-icon', src: tip.ext.icon, alt: '', onError: (e) => { e.target.style.display = 'none' } })
-                  : null,
-                React.createElement('div', { className: 'dsth-tip-title' },
-                  React.createElement('span', { className: 'dsth-tip-name' }, tip.ext.displayName || tip.ext.name),
-                  React.createElement('span', { className: 'dsth-tip-sub' }, tip.ext.namespace + '.' + tip.ext.name + ' · v' + tip.ext.version)
-                )
-              ),
-              tip.ext.description
-                ? React.createElement('p', { className: 'dsth-tip-desc' }, tip.ext.description.slice(0, 220) + (tip.ext.description.length > 220 ? '…' : ''))
-                : null,
-              React.createElement('div', { className: 'dsth-tip-meta' },
-                '作者 ' + tip.ext.author + (tip.ext.license ? ' · ' + tip.ext.license : '') + ' · ' +
-                fmtCount(tip.ext.downloadCount) + ' 次下载' +
-                (fmtRating(tip.ext.rating, tip.ext.reviewCount) ? ' · ' + fmtRating(tip.ext.rating, tip.ext.reviewCount) : '') +
-                (tip.ext.timestamp ? ' · 更新 ' + fmtDate(tip.ext.timestamp) : '')
-              ),
-              React.createElement('div', { className: 'dsth-tip-links' },
-                React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(tip.ext.url || 'https://open-vsx.org/extension/' + tip.ext.namespace + '/' + tip.ext.name) }, '扩展详情'),
-                tip.ext.repository
-                  ? React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(tip.ext.repository) }, '主页/仓库')
-                  : null
-              )
-            )
-          : null,
-
         React.createElement('div', { className: 'dsth-foot' },
           React.createElement('span', { className: 'dsth-note' }, '调色板与导入主题为运行时状态,停止插件后自动恢复默认外观。')
         )
@@ -679,7 +650,7 @@ export default {
     }
 
     slots.inject('settings.section', () => slots.register(
-      { name: 'settings.section', id: 'dsh-themes', order: 12, label: '主题' },
+      { name: 'settings.section', id: 'dsh-themes', order: 12, label: '🎨 主题' },
       () => React.createElement(ThemesPage)
     ))
 
