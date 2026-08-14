@@ -220,6 +220,7 @@ return {
         '--dsw-specific-sidebar-nav-item-active-accent': rgbToHex(navActiveAccent),
         '--dsw-static-deepseek-500': rgbToHex(accent),
         '--dsw-static-deepseek-200': rgbToHex(shimmerLight),
+        '--dsw-static-deepseek-450': rgbToHex(accent),
         '--dsw-specific-bubble': rgbToHex(bubble),
         '--dsw-specific-bubble-highlight': rgbToHex(bubbleHighlight),
       }
@@ -370,6 +371,7 @@ return {
         '--dsw-specific-sidebar-nav-item-active-accent': rgbToHex(navActiveAccent),
         '--dsw-static-deepseek-500': rgbToHex(accentRgb),
         '--dsw-static-deepseek-200': rgbToHex(shimmerLight),
+        '--dsw-static-deepseek-450': rgbToHex(accentRgb),
         '--dsw-specific-bubble': toHex(messageSurface),
         '--dsw-specific-bubble-highlight': toHex(accentSurface),
       }
@@ -401,6 +403,7 @@ return {
             '--dsw-specific-sidebar-nav-item-active-accent': '#463753',
             '--dsw-static-deepseek-500': '#a3004c',
             '--dsw-static-deepseek-200': '#a36691',
+            '--dsw-static-deepseek-450': '#a3004c',
             '--dsw-specific-bubble': '#2b2431',
             '--dsw-specific-bubble-highlight': '#362d3d',
           }
@@ -426,6 +429,7 @@ return {
             '--dsw-specific-sidebar-nav-item-active-accent': '#eccfe3',
             '--dsw-static-deepseek-500': '#db2777',
             '--dsw-static-deepseek-200': '#f2b3cf',
+            '--dsw-static-deepseek-450': '#db2777',
             '--dsw-specific-bubble': '#f7def2',
             '--dsw-specific-bubble-highlight': '#f1c4e6',
           }
@@ -558,6 +562,7 @@ return {
           '--dsw-specific-sidebar-nav-item-active-accent': d['--dsw-specific-sidebar-nav-item-active-accent'],
           '--dsw-static-deepseek-500': actionHex || d['--dsw-static-deepseek-500'],
           '--dsw-static-deepseek-200': d['--dsw-static-deepseek-200'],
+          '--dsw-static-deepseek-450': actionHex || d['--dsw-static-deepseek-450'],
           '--dsw-specific-bubble': d['--dsw-specific-bubble'],
           '--dsw-specific-bubble-highlight': d['--dsw-specific-bubble-highlight'],
         }
@@ -576,7 +581,7 @@ return {
       '--dsw-alias-button-info-fill', '--dsw-alias-button-info-hover',
       '--dsw-alias-state-business-primary', '--dsw-alias-state-business-tertiary',
       '--dsw-specific-sidebar-nav-item-active', '--dsw-specific-sidebar-nav-item-active-accent',
-      '--dsw-static-deepseek-500', '--dsw-static-deepseek-200',
+      '--dsw-static-deepseek-500', '--dsw-static-deepseek-200', '--dsw-static-deepseek-450',
       '--dsw-specific-bubble', '--dsw-specific-bubble-highlight',
     ]
 
@@ -613,6 +618,7 @@ return {
         '--dsw-specific-sidebar-nav-item-active-accent': '#e4edfd',
         '--dsw-static-deepseek-500': '#4176e6',
         '--dsw-static-deepseek-200': '#d3e2ff',
+        '--dsw-static-deepseek-450': '#5686fe',
         '--dsw-specific-bubble': '#edf3fe',
         '--dsw-specific-bubble-highlight': '#d3e2ff',
       },
@@ -638,6 +644,7 @@ return {
         '--dsw-specific-sidebar-nav-item-active-accent': '#353536',
         '--dsw-static-deepseek-500': '#4176e6',
         '--dsw-static-deepseek-200': '#d3e2ff',
+        '--dsw-static-deepseek-450': '#5686fe',
         '--dsw-specific-bubble': '#2c2c2e',
         '--dsw-specific-bubble-highlight': '#43454a',
       },
@@ -892,8 +899,8 @@ return {
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
         '.dsth-select{flex:none;min-width:150px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220%200%2012%2012%22 fill=%22none%22%3E%3Cpath d=%22M3%204.5L6%207.5L9%204.5%22 stroke=%22%2381858C%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E");background-position:right 8px center;background-repeat:no-repeat;background-size:12px 12px;padding-right:24px;cursor:pointer}' +
         '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
-        '.dsth-bar{display:flex;border-radius:6px;overflow:hidden;width:100%;height:10px;margin-top:2px;flex:none}' +
-        '.dsth-bar-seg{flex:1;min-width:0}' +
+        '.dsth-dots{display:flex;gap:4px;flex:none;padding-left:2px}' +
+        '.dsth-dot{width:12px;height:12px;border-radius:50%;border:1px solid var(--dsw-alias-border-l1);box-sizing:border-box}' +
         '.dsth-colcard{grid-column:1 / -1}' +
         '.dsth-col-list{display:flex;flex-direction:column;gap:6px}' +
         '.dsth-colitem{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-layer-2)}' +
@@ -1090,8 +1097,8 @@ return {
         return null
       }
 
-      const renderSwatchBar = (tokens) => React.createElement('div', { className: 'dsth-bar' },
-        SWATCH_TOKENS.map((t) => React.createElement('span', { key: t, className: 'dsth-bar-seg', style: { background: tokens[t] } }))
+      const renderSwatchDots = (tokens) => React.createElement('div', { className: 'dsth-dots' },
+        SWATCH_TOKENS.map((t) => React.createElement('span', { key: t, className: 'dsth-dot', style: { background: tokens[t] } }))
       )
 
       const renderCard = (palette, extra) => {
@@ -1122,7 +1129,7 @@ return {
           },
             variants.map((v, i) => React.createElement('option', { key: v.label + i, value: String(i) }, v.label))
           ),
-          renderSwatchBar(palette[mode])
+          renderSwatchDots(palette[mode])
         )
       }
 
