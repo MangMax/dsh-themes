@@ -252,6 +252,7 @@ return {
           rating: Number(e.averageRating) || 0,
           reviewCount: Number(e.reviewCount) || 0,
           timestamp: typeof e.timestamp === 'string' ? e.timestamp : '',
+          description: typeof e.description === 'string' && e.description.trim() ? e.description.trim() : '',
         })).filter((e) => e.namespace && e.name && e.downloadUrl).slice(0, 10)
         return { ok: true, list }
       } catch (e) {
@@ -362,10 +363,14 @@ return {
         let author = ''
         if (typeof detail.author === 'string') author = detail.author.trim()
         else if (detail.author && typeof detail.author === 'object' && typeof detail.author.name === 'string') author = detail.author.name.trim()
+        let repository = ''
+        if (detail.repository && typeof detail.repository.url === 'string') repository = detail.repository.url.trim()
         return {
           ok: true,
           author,
           license: typeof detail.license === 'string' && detail.license.trim() ? detail.license.trim() : '',
+          url: typeof detail.url === 'string' && detail.url.trim() ? detail.url.trim() : '',
+          repository,
         }
       } catch (e) {
         return { ok: false, error: '详情获取失败:' + ((e && e.message) || String(e)) }

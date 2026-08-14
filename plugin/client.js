@@ -893,6 +893,19 @@ return {
         '.dsth-listitem-name{color:var(--dsw-alias-label-primary)}' +
         '.dsth-searchitem{gap:10px}' +
         '.dsth-ext-icon{width:28px;height:28px;border-radius:8px;flex:none;object-fit:cover}' +
+        '.dsth-ext-click{cursor:pointer}' +
+        '.dsth-ext-click:hover{text-decoration:underline}' +
+        '.dsth-tip{position:fixed;z-index:100;width:300px;max-width:calc(100vw - 16px);background:var(--dsw-alias-bg-overlay);border:1px solid var(--dsw-alias-border-l2);border-radius:12px;padding:10px 12px;box-shadow:0 8px 24px rgba(0,0,0,0.18);display:flex;flex-direction:column;gap:6px;pointer-events:auto}' +
+        '.dsth-tip-head{display:flex;gap:8px;align-items:center}' +
+        '.dsth-tip-icon{width:32px;height:32px;border-radius:8px;flex:none;object-fit:cover}' +
+        '.dsth-tip-title{display:flex;flex-direction:column;min-width:0}' +
+        '.dsth-tip-name{color:var(--dsw-alias-label-primary);font-size:13px;font-weight:600;line-height:18px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+        '.dsth-tip-sub{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
+        '.dsth-tip-desc{color:var(--dsw-alias-label-secondary);font-size:11px;line-height:16px;margin:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}' +
+        '.dsth-tip-meta{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
+        '.dsth-tip-links{display:flex;gap:6px;margin-top:2px}' +
+        '.dsth-tip-link{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:6px;padding:2px 8px;font-size:11px;line-height:16px;cursor:pointer;font:inherit}' +
+        '.dsth-tip-link:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
         '.dsth-listitem-path{color:var(--dsw-alias-label-caption);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
         '.dsth-msg{padding:6px 10px;border-radius:8px;font-size:12px;line-height:18px}' +
         '.dsth-msg-ok{color:var(--dsw-alias-state-success-primary)}' +
@@ -1009,6 +1022,7 @@ return {
       const [message, setMessage] = React.useState(null)
       const [searchQuery, setSearchQuery] = React.useState('')
       const [searchResults, setSearchResults] = React.useState(null)
+      const [tip, setTip] = React.useState(null)
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
@@ -1109,7 +1123,7 @@ return {
             if (list.length > 0) {
               Promise.all(list.map((ext) => host.call('open-vsx-detail', { namespace: ext.namespace, name: ext.name }).then((d) => {
                 if (d && d.ok) {
-                  setSearchResults((prev) => prev.map((e) => e === ext ? { ...e, author: d.author || e.author, license: d.license || e.license } : e))
+                  setSearchResults((prev) => prev.map((e) => e === ext ? { ...e, author: d.author || e.author, license: d.license || e.license, url: d.url || e.url || '', repository: d.repository || '' } : e))
                 }
               }).catch(() => {})))
             }
@@ -1155,6 +1169,19 @@ return {
       }
 
       // ---- 渲染 ----
+
+      const openLink = (url) => {
+        if (!url) return
+        try { window.open(url, '_blank', 'noopener') } catch { /* ignore */ }
+      }
+
+      const showTip = (e, ext) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        const w = typeof window !== 'undefined' ? window.innerWidth : 1200
+        const left = Math.min(rect.left, Math.max(8, w - 320))
+        setTip({ ext, x: left, y: rect.bottom + 6 })
+      }
+      const hideTip = () => setTip(null)
 
       const paletteBadge = (palette) => {
         if (store.current === palette.id) return '使用中'
@@ -1254,6 +1281,7 @@ return {
           searchResults && searchResults.length > 0
             ? React.createElement('div', { className: 'dsth-list' },
                 searchResults.map((ext) => {
+                  const detailUrl = ext.url || 'https://open-vsx.org/extension/' + ext.namespace + '/' + ext.name
                   const meta = [
                     '作者 ' + ext.author,
                     ext.license ? ext.license : '',
@@ -1262,17 +1290,28 @@ return {
                     fmtRating(ext.rating, ext.reviewCount),
                     ext.timestamp ? '更新 ' + fmtDate(ext.timestamp) : '',
                   ].filter(Boolean).join(' · ')
-                  return React.createElement('div', { key: ext.namespace + '.' + ext.name, className: 'dsth-listitem dsth-searchitem' },
+                  return React.createElement('div', {
+                    key: ext.namespace + '.' + ext.name,
+                    className: 'dsth-listitem dsth-searchitem',
+                    onMouseEnter: (e) => showTip(e, ext),
+                    onMouseLeave: hideTip,
+                  },
                     ext.icon
                       ? React.createElement('img', {
-                          className: 'dsth-ext-icon',
+                          className: 'dsth-ext-icon dsth-ext-click',
                           src: ext.icon,
                           alt: '',
+                          title: '打开扩展详情',
+                          onClick: () => openLink(detailUrl),
                           onError: (e) => { e.target.style.display = 'none' },
                         })
                       : null,
                     React.createElement('div', { className: 'dsth-listitem-main' },
-                      React.createElement('span', { className: 'dsth-listitem-name' }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
+                      React.createElement('span', {
+                        className: 'dsth-listitem-name dsth-ext-click',
+                        title: '打开扩展详情',
+                        onClick: () => openLink(detailUrl),
+                      }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
                       React.createElement('span', { className: 'dsth-listitem-path' }, meta)
                     ),
                   React.createElement('button', {
@@ -1324,6 +1363,35 @@ return {
         ),
 
         message ? React.createElement('div', { className: 'dsth-msg dsth-msg-' + message.kind }, message.text) : null,
+
+        tip
+          ? React.createElement('div', { className: 'dsth-tip', style: { left: tip.x, top: tip.y } },
+              React.createElement('div', { className: 'dsth-tip-head' },
+                tip.ext.icon
+                  ? React.createElement('img', { className: 'dsth-tip-icon', src: tip.ext.icon, alt: '', onError: (e) => { e.target.style.display = 'none' } })
+                  : null,
+                React.createElement('div', { className: 'dsth-tip-title' },
+                  React.createElement('span', { className: 'dsth-tip-name' }, tip.ext.displayName || tip.ext.name),
+                  React.createElement('span', { className: 'dsth-tip-sub' }, tip.ext.namespace + '.' + tip.ext.name + ' · v' + tip.ext.version)
+                )
+              ),
+              tip.ext.description
+                ? React.createElement('p', { className: 'dsth-tip-desc' }, tip.ext.description.slice(0, 220) + (tip.ext.description.length > 220 ? '…' : ''))
+                : null,
+              React.createElement('div', { className: 'dsth-tip-meta' },
+                '作者 ' + tip.ext.author + (tip.ext.license ? ' · ' + tip.ext.license : '') + ' · ' +
+                fmtCount(tip.ext.downloadCount) + ' 次下载' +
+                (fmtRating(tip.ext.rating, tip.ext.reviewCount) ? ' · ' + fmtRating(tip.ext.rating, tip.ext.reviewCount) : '') +
+                (tip.ext.timestamp ? ' · 更新 ' + fmtDate(tip.ext.timestamp) : '')
+              ),
+              React.createElement('div', { className: 'dsth-tip-links' },
+                React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(tip.ext.url || 'https://open-vsx.org/extension/' + tip.ext.namespace + '/' + tip.ext.name) }, '扩展详情'),
+                tip.ext.repository
+                  ? React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(tip.ext.repository) }, '主页/仓库')
+                  : null
+              )
+            )
+          : null,
 
         React.createElement('div', { className: 'dsth-foot' },
           React.createElement('span', { className: 'dsth-note' }, '调色板与导入主题为运行时状态,停止插件后自动恢复默认外观。')
