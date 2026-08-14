@@ -526,6 +526,16 @@ return {
       const buildTokens = (mode) => {
         const d = mode === appearance ? derived : derivedOpp
         const canvasRgb = parseHex(canvasHex, { r: 0, g: 0, b: 0 })
+        // 操作色通道(对应 t3code messageAction = button.background):按钮/进度/tab/动画用按钮色,独立于 accent
+        let actionHex = null
+        let actionHoverHex = null
+        const actionColor = pick('button.background', 'progressBar.background', 'activityBarBadge.background')
+        if (actionColor) {
+          actionHex = flattenOver(actionColor, canvasRgb)
+          const ar = parseHex(actionHex, { r: 0, g: 0, b: 0 })
+          const af = readableForeground(ar)
+          actionHoverHex = rgbToHex(mixRgb(ar, (af === LIGHT_FG || af === WHITE_FG) ? BLACK_FG : WHITE_FG, 0.12))
+        }
         return {
           '--dsw-alias-bg-base': canvasHex,
           '--dsw-alias-bg-layer-1': solidOver(canvasRgb, 'editorWidget.background') || d['--dsw-alias-bg-layer-1'],
@@ -540,13 +550,13 @@ return {
           '--dsw-alias-state-warn-primary': readableOn(canvasHex, d['--dsw-alias-state-warn-primary'], 'editorWarning.foreground'),
           '--dsw-alias-state-success-primary': d['--dsw-alias-state-success-primary'],
           '--dsw-specific-sidebar-fill': solidOver(canvasRgb, 'sideBar.background', 'activityBar.background') || d['--dsw-specific-sidebar-fill'],
-          '--dsw-alias-button-info-fill': d['--dsw-alias-button-info-fill'],
-          '--dsw-alias-button-info-hover': d['--dsw-alias-button-info-hover'],
-          '--dsw-alias-state-business-primary': d['--dsw-alias-state-business-primary'],
+          '--dsw-alias-button-info-fill': actionHex || d['--dsw-alias-button-info-fill'],
+          '--dsw-alias-button-info-hover': actionHoverHex || d['--dsw-alias-button-info-hover'],
+          '--dsw-alias-state-business-primary': actionHex || d['--dsw-alias-state-business-primary'],
           '--dsw-alias-state-business-tertiary': d['--dsw-alias-state-business-tertiary'],
           '--dsw-specific-sidebar-nav-item-active': d['--dsw-specific-sidebar-nav-item-active'],
           '--dsw-specific-sidebar-nav-item-active-accent': d['--dsw-specific-sidebar-nav-item-active-accent'],
-          '--dsw-static-deepseek-500': d['--dsw-static-deepseek-500'],
+          '--dsw-static-deepseek-500': actionHex || d['--dsw-static-deepseek-500'],
           '--dsw-static-deepseek-200': d['--dsw-static-deepseek-200'],
           '--dsw-specific-bubble': d['--dsw-specific-bubble'],
           '--dsw-specific-bubble-highlight': d['--dsw-specific-bubble-highlight'],
