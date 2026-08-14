@@ -22,7 +22,7 @@
 ## 使用
 
 - **外观模式**:跟随系统 / 浅色 / 深色,写的是 DSH 内置主题偏好(`theme.setTheme`),与设置 → 外观 行同步并持久化;
-- **内置调色板**:DSH Chat、Grove、Ocean、Ember、Iris,每套含明暗变体;点击卡片标题仅应用调色板,点击变体按钮同时切换外观模式;
+- **内置调色板**:DSH 默认、Chat、Grove、Ocean、Ember、Iris,每套含明暗变体;点击卡片标题仅应用调色板,点击变体按钮同时切换外观模式;
 - **从 VS Code 导入**:
   - 扫描本地扩展:默认扫描 `~/.vscode/extensions`、`~/.vscode-insiders/extensions`、`~/.cursor/extensions`(经 `$HOME` 发现),也可手动填写目录;
   - URL 获取:任意返回原始主题 JSON 的 http(s) 地址;

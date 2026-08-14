@@ -657,8 +657,12 @@ return {
       darkVariants: [{ label: '深色', tokens: p.dark }],
     })
 
+    /** 默认主题 = DSH 原生外观(恢复默认即应用此卡片)。 */
+    const DEFAULT_THEME = withVariants({ id: 'dsh-default', label: 'DSH 默认', light: DEFAULT_PALETTE.light, dark: DEFAULT_PALETTE.dark })
+
     const PALETTES = [
-      withVariants({ id: 'dsh-chat', label: 'DSH Chat', light: chatTokens('light'), dark: chatTokens('dark') }),
+      DEFAULT_THEME,
+      withVariants({ id: 'dsh-chat', label: 'Chat', light: chatTokens('light'), dark: chatTokens('dark') }),
       withVariants({ id: 'grove', label: 'Grove', light: createManagedColors('light', '#f2f8f4', '#19734a'), dark: createManagedColors('dark', '#1d2b24', '#69d69a') }),
       withVariants({ id: 'ocean', label: 'Ocean', light: createManagedColors('light', '#f2f7fb', '#2878b8'), dark: createManagedColors('dark', '#1b2938', '#70b9ee') }),
       withVariants({ id: 'ember', label: 'Ember', light: createManagedColors('light', '#fff6ef', '#c4602f'), dark: createManagedColors('dark', '#30231e', '#f39a62') }),
@@ -729,9 +733,7 @@ return {
 
     function removeCustom(id) {
       store.custom = store.custom.filter((p) => p.id !== id)
-      if (store.current === id) store.current = null
-      if (store.mixed.light === id) store.mixed.light = null
-      if (store.mixed.dark === id) store.mixed.dark = null
+      if (store.current === id) store.current = 'dsh-default'
       applyLayers()
       persist()
     }
@@ -899,7 +901,8 @@ return {
         '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
         '.dsth-select{flex:none;min-width:150px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2212%22 height=%2212%22 viewBox=%220%200%2012%2012%22 fill=%22none%22%3E%3Cpath d=%22M3%204.5L6%207.5L9%204.5%22 stroke=%22%2381858C%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/%3E%3C/svg%3E");background-position:right 8px center;background-repeat:no-repeat;background-size:12px 12px;padding-right:24px;cursor:pointer}' +
         '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
-        '.dsth-ball{width:20px;height:20px;border-radius:50%;flex:none;display:inline-block;cursor:pointer;border:none;padding:0;transition:width .15s ease,height .15s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
+        '.dsth-ball-slot{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center}' +
+        '.dsth-ball{width:20px;height:20px;border-radius:50%;display:inline-block;cursor:pointer;border:none;padding:0;transition:width .15s ease,height .15s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
         '.dsth-ball-dark{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14),0 1px 2px rgba(0,0,0,0.18)}' +
         '.dsth-ball-active{width:32px;height:32px}' +
         '.dsth-balls{display:flex;gap:6px;align-items:center;overflow-x:auto;flex:1;min-width:0;padding:2px 0;scrollbar-width:none}' +
@@ -980,13 +983,14 @@ return {
           onClick: () => scrollBy(-1),
         }, '\u2039'),
         React.createElement('div', { className: 'dsth-balls', ref, onScroll: updateNav },
-          variants.map((v, i) => React.createElement('button', {
-            key: v.label + i,
-            className: 'dsth-ball' + (i === activeIdx ? ' dsth-ball-active' : '') + (dark ? ' dsth-ball-dark' : ''),
-            style: ballStyle(v.tokens),
-            title: v.label,
-            onClick: () => setVariant(palette, mode, v),
-          }))
+          variants.map((v, i) => React.createElement('span', { key: v.label + i, className: 'dsth-ball-slot' },
+            React.createElement('button', {
+              className: 'dsth-ball' + (i === activeIdx ? ' dsth-ball-active' : '') + (dark ? ' dsth-ball-dark' : ''),
+              style: ballStyle(v.tokens),
+              title: v.label,
+              onClick: () => setVariant(palette, mode, v),
+            })
+          ))
         ),
         React.createElement('button', {
           className: 'dsth-nav' + (nav.right ? '' : ' dsth-nav-disabled'),
@@ -1232,8 +1236,8 @@ return {
             }, MODE_LABELS[m])),
             React.createElement('button', {
               className: 'dsth-btn',
-              onClick: () => { applyPalette(null); theme.setTheme('system') },
-            }, '清除调色板并恢复默认')
+              onClick: () => { applyPalette(DEFAULT_THEME); theme.setTheme('system') },
+            }, '恢复默认主题')
           )
         ),
 
