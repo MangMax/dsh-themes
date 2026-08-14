@@ -1,5 +1,5 @@
 // OKLCH 感知引擎(移植自 t3code createVividThemeColors,用于 VS Code 导入派生)
-import { luminance, contrastRatio, mixRgb, readableForeground, mutedText, parseHex, rgbToHex, LIGHT_FG, WHITE_FG, BLACK_FG } from './color-utils.js'
+import { luminance, contrastRatio, mixRgb, readableForeground, mutedText, parseHex, rgbToHex, statusColors, LIGHT_FG, WHITE_FG, BLACK_FG } from './color-utils.js'
 export function srgbToLinear(c) {
       const v = c / 255
       return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4)

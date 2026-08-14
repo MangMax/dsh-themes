@@ -2,7 +2,7 @@
 // 本文件由 VitePlus(vp pack)打包为 IIFE 并包装成插件函数体。
 // 调色板引擎(语义角色映射、双种子生成、对比度求解)与 VS Code 导入映射的
 // 架构灵感来自 t3code(https://github.com/pingdotgg/t3code),详见仓库 README。
-import { DEFAULT_THEME, TOKEN_NAMES } from './palette.js'
+import { DEFAULT_THEME, TOKEN_NAMES, PALETTES, DEFAULT_PALETTE, CORE_TOKEN_NAMES } from './palette.js'
 import { humanizeName, parseVsCodeTheme, slugify } from './vs-import.js'
 import { STYLES_CSS } from './styles.js'
 export const PLUGIN_NAME = 'dsh-themes'
