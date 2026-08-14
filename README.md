@@ -1,36 +1,46 @@
-# DSH 主题 (dsh-themes)
+# dsh-themes
 
-DSH(DeepSeek Harness)运行时的**外观与主题**插件:5 套内置调色板、明 / 暗 / 跟随系统外观模式、明暗混合、Open VSX 搜索安装、VS Code 主题导入,主题库持久化。
+DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明 / 暗 / 跟随系统外观模式、Open VSX 搜索安装、VS Code 主题导入,主题库持久化。
 
-> **灵感来源**:[t3code](https://github.com/pingdotgg/t3code) 的主题架构——语义色角色、双种子调色板生成、感知色对比度求解与 VS Code 主题导入映射。本仓库的实现、命名与品牌均为 DSH 自有。
+> 主题引擎(语义角色映射、双种子生成、对比度求解、OKLCH 感知导入映射)的架构灵感来自
+> [t3code](https://github.com/pingdotgg/t3code);品牌与命名均为 DSH 自有。
 
 ## 功能
 
-- **外观模式**:跟随系统 / 浅色 / 深色,与 DSH 内置「外观」设置双向同步
-- **内置调色板**:DSH 默认、Chat、Grove、Ocean、Ember、Iris,每套含浅色与深色变体;调色板以 token 覆盖层应用,跟随系统时自动切换对应变体
-- **品牌色跟随主题**:发送按钮、对话/轨迹 tab 选中、侧栏选中项与图标、用户气泡、思考状态动画等 DeepSeek 品牌色系,统一由主题的强调色派生
-- **明暗混合**:为浅色与深色分别指定调色板(如浅色 Grove + 深色 Iris),缺半自动用 DSH 默认值兜底;跟随系统时按系统明暗切换
-- **搜索安装(Open VSX)**:搜索主题扩展 → Host 下载 VSIX(≤20MB)→ 解压 → 列出扩展贡献的主题 → 一键导入
-- **VS Code 主题导入**:
-  - 扫描本地扩展目录(`~/.vscode/extensions`、`~/.vscode-insiders/extensions`、`~/.cursor/extensions`),读取扩展 `contributes.themes` 声明
-  - 通过 URL 获取原始主题 JSON(如 GitHub raw)
-  - 直接粘贴 `*-color-theme.json` 内容
-  - 导入时自动:解析 VS Code 颜色(hex 3/4/6/8 位、`color(display-p3)`、alpha 扁平化)→ 以 `editor.background` 与强调色为种子派生完整调色板 → workbench 指定值经对比度门控(≥4.5)逐项采用 → 自动生成另一明暗模式的配套变体
-- **持久化**:导入的主题、当前选择与明暗混合保存到 `~/.dsh/dsh-themes.json`,刷新或重启后自动恢复
+- **主题卡片模型**:每个主题含明色/暗色两个变体槽,槽内聚合全部明色/暗色变体可选;导入的扩展聚合为一个主题卡片
+- **默认主题卡片**:DSH 原生外观也是可选主题;删除使用中的导入主题或点击「恢复默认主题」均回退到它
+- **变体选择器**:多色融合球列表(参照 t3code ThemePreviewCircle),选中放大(固定槽位不跳动)、溢出左右箭头导航、悬停显示变体名
+- **外观模式**:跟随系统 / 浅色 / 深色,明暗变体随模式自动切换
+- **搜索安装(Open VSX)**:单请求搜索,展示图标/作者/许可证/评分/更新时间;悬浮名称或图标查看详情卡片,点击打开扩展页或仓库;「导入」一步完成下载、解析(include 合并)与聚合导入,版本化缓存重复导入秒开
+- **VS Code 导入**:本地扩展扫描、URL 获取、粘贴 JSON;OKLCH 感知引擎派生表面,workbench 指定值对比度门控,操作色独立于 accent
+- **状态动画色**:运行状态点阵(`--dsh-state-ongoing` → `--dsw-static-deepseek-450`)跟随主题
+- **持久化**:主题库保存到 `~/.dsh/dsh-themes.json`,重启后恢复
+
+## 开发
+
+源码为 **TypeScript 模块**,由 **VitePlus(`vp`)打包**为 DSH 插件函数体(平台要求单文件,`vite.config.ts` 的 `pack` 块负责 IIFE 构建与函数体包装)。
+
+```bash
+vp pack          # 构建 dist/client/index.js 与 dist/host/index.js(即插件函数体)
+vp check         # 语法检查
+```
+
+### 结构
+
+```
+client/src/        # 浏览器半区(设置页 UI、调色板引擎)
+  color-utils.ts   #   RGB/HSL/WCAG 对比度、双种子调色板
+  oklch.ts         #   OKLCH 感知引擎(导入派生)
+  chat.ts          #   Chat 调色板(t3.chat 界面取色,颜色保持原样)
+  vs-import.ts     #   VS Code 主题解析与映射
+  palette.ts       #   token 清单、默认外观、内置主题
+  styles.ts        #   设置页样式
+  index.ts         #   入口:状态/覆盖层/设置页/注册
+host/src/          # Node 半区(RPC)
+  util.ts          #   shell/curl 工具工厂
+  index.ts         #   入口:扫描/读取/搜索/详情/安装/持久化
+```
 
 ## 安装
 
-动态插件在 DSH 会话内通过 `cordis_define` 定义,详细步骤见 [docs/install.md](docs/install.md)。定义并运行后,在 **设置 → 主题** 页面使用。
-
-## 架构
-
-| 文件 | 说明 |
-| --- | --- |
-| `plugin/host.js` | Host 半区:本地扩展目录扫描、主题文件读取、URL 获取、Open VSX 搜索与 VSIX 安装(依赖 `curl`/`unzip`)、主题库持久化(经 `shell`/`fs`/`web` 服务) |
-| `plugin/client.js` | Client 半区:调色板引擎、13 个 DSH alias token 覆盖层、明暗混合、设置页 UI、持久化恢复 |
-
-主题通过 DSH 的 `theme.overrideTokens` 以单一覆盖层应用(每个 token 携带 `light`/`dark` 双值),停止插件后自动恢复默认外观。
-
-## License
-
-MIT
+在 DSH 中运行插件:`cordis_define` 的 `code.host`/`code.client` 分别取 `dist/host/index.js` 与 `dist/client/index.js`。
