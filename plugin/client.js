@@ -8,6 +8,9 @@
 // 实现要点:
 //   - 13 个 DSH alias token 以 theme.overrideTokens 单覆盖层应用(每 token 携带
 //     light/dark 双值),外观模式由 theme.setTheme('system'|'light'|'dark') 决定;
+//   - 明暗混合:浅色与深色可分别指定调色板,缺半用 DSH 默认值兜底;
+//   - 搜索安装:经 Open VSX 搜索扩展,Host 下载 VSIX 并解压列出贡献的主题;
+//   - 持久化:主题库(导入、选择、混合)保存到 ~/.dsh/dsh-themes.json,重启后恢复;
 //   - 设置页注册在 settings.section 槽位(id: dsh-themes)。
 return {
   apply(ctx) {
@@ -362,6 +365,40 @@ return {
       '--dsw-specific-sidebar-fill',
     ]
 
+    /** DSH 内置外观的 13 个 token 默认值(明暗混合缺半时的兜底)。 */
+    const DEFAULT_PALETTE = {
+      light: {
+        '--dsw-alias-bg-base': '#ffffff',
+        '--dsw-alias-bg-layer-1': '#ffffff',
+        '--dsw-alias-bg-layer-2': '#ffffff',
+        '--dsw-alias-bg-overlay': '#e9ecf2',
+        '--dsw-alias-border-l1': 'rgba(0, 0, 0, 0.04)',
+        '--dsw-alias-border-l2': 'rgba(0, 0, 0, 0.10)',
+        '--dsw-alias-brand-primary': '#0f1115',
+        '--dsw-alias-label-primary': '#0f1115',
+        '--dsw-alias-label-secondary': '#61666b',
+        '--dsw-alias-state-error-primary': '#ec1313',
+        '--dsw-alias-state-warn-primary': '#f59e0b',
+        '--dsw-alias-state-success-primary': '#22c55e',
+        '--dsw-specific-sidebar-fill': '#f9fafb',
+      },
+      dark: {
+        '--dsw-alias-bg-base': '#151517',
+        '--dsw-alias-bg-layer-1': '#232324',
+        '--dsw-alias-bg-layer-2': '#2c2c2e',
+        '--dsw-alias-bg-overlay': '#61666b',
+        '--dsw-alias-border-l1': 'rgba(255, 255, 255, 0.06)',
+        '--dsw-alias-border-l2': 'rgba(255, 255, 255, 0.12)',
+        '--dsw-alias-brand-primary': '#f9fafb',
+        '--dsw-alias-label-primary': '#f9fafb',
+        '--dsw-alias-label-secondary': '#cfd3d6',
+        '--dsw-alias-state-error-primary': '#f25a5a',
+        '--dsw-alias-state-warn-primary': '#f59e0b',
+        '--dsw-alias-state-success-primary': '#22c55e',
+        '--dsw-specific-sidebar-fill': '#1b1b1c',
+      },
+    }
+
     const PALETTES = [
       { id: 'dsh-chat', label: 'DSH Chat', light: chatTokens('light'), dark: chatTokens('dark') },
       { id: 'grove', label: 'Grove', light: createManagedColors('light', '#f2f8f4', '#19734a'), dark: createManagedColors('dark', '#1d2b24', '#69d69a') },
@@ -374,30 +411,102 @@ return {
 
     const store = {
       current: null,
+      mixed: { light: null, dark: null },
       custom: [],
+      loaded: false,
       listeners: new Set(),
       subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn) },
       emit() { for (const fn of this.listeners) fn() },
     }
     let layerDisposer = null
 
-    function applyPalette(palette) {
-      if (palette === null) {
+    function paletteById(id) {
+      if (!id) return null
+      return PALETTES.find((p) => p.id === id) || store.custom.find((p) => p.id === id) || null
+    }
+
+    /** 将主题库状态持久化到 ~/.dsh/dsh-themes.json(Host 侧写入)。 */
+    function persist() {
+      if (!store.loaded) return
+      host.call('persist-themes', {
+        payload: { current: store.current, mixed: store.mixed, custom: store.custom },
+      }).catch(() => {})
+    }
+
+    /** 统一应用覆盖层:明暗混合优先,其次当前调色板,否则清除。 */
+    function applyLayers() {
+      const hasMixed = !!(store.mixed.light || store.mixed.dark)
+      if (hasMixed) {
+        const lightPalette = paletteById(store.mixed.light)
+        const darkPalette = paletteById(store.mixed.dark)
+        const pairs = {}
+        for (const name of TOKEN_NAMES) {
+          pairs[name] = {
+            light: lightPalette ? lightPalette.light[name] : DEFAULT_PALETTE.light[name],
+            dark: darkPalette ? darkPalette.dark[name] : DEFAULT_PALETTE.dark[name],
+          }
+        }
+        layerDisposer = theme.overrideTokens('dsh-themes', pairs)
+      } else if (store.current) {
+        const palette = paletteById(store.current)
+        if (!palette) {
+          store.current = null
+          store.emit()
+          return
+        }
+        const pairs = {}
+        for (const name of TOKEN_NAMES) pairs[name] = { light: palette.light[name], dark: palette.dark[name] }
+        layerDisposer = theme.overrideTokens('dsh-themes', pairs)
+      } else {
         if (layerDisposer) { layerDisposer(); layerDisposer = null }
-        store.current = null
-        store.emit()
-        return
       }
-      const pairs = {}
-      for (const name of TOKEN_NAMES) pairs[name] = { light: palette.light[name], dark: palette.dark[name] }
-      layerDisposer = theme.overrideTokens('dsh-themes', pairs)
-      store.current = palette.id
       store.emit()
+    }
+
+    function applyPalette(palette) {
+      store.current = palette ? palette.id : null
+      applyLayers()
+      persist()
+    }
+
+    /** 设置明暗混合的一半;id 为空表示该半使用默认外观。 */
+    function setMixed(mode, id) {
+      store.mixed[mode] = id || null
+      applyLayers()
+      persist()
     }
 
     function removeCustom(id) {
       store.custom = store.custom.filter((p) => p.id !== id)
-      if (store.current === id) applyPalette(null)
+      if (store.current === id) store.current = null
+      if (store.mixed.light === id) store.mixed.light = null
+      if (store.mixed.dark === id) store.mixed.dark = null
+      applyLayers()
+      persist()
+    }
+
+    function isValidPalette(p) {
+      return !!p && typeof p === 'object' && typeof p.id === 'string' && typeof p.label === 'string' &&
+        p.light && typeof p.light === 'object' && p.dark && typeof p.dark === 'object' &&
+        TOKEN_NAMES.every((t) => typeof p.light[t] === 'string' && typeof p.dark[t] === 'string')
+    }
+
+    /** 从持久化存储恢复主题库(异步、幂等)。 */
+    async function hydrate() {
+      try {
+        const res = await host.call('load-themes', {})
+        if (res && res.ok && res.data) {
+          const d = res.data
+          if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p))
+          if (typeof d.current === 'string' && paletteById(d.current)) store.current = d.current
+          if (d.mixed && typeof d.mixed === 'object') {
+            if (typeof d.mixed.light === 'string' && paletteById(d.mixed.light)) store.mixed.light = d.mixed.light
+            if (typeof d.mixed.dark === 'string' && paletteById(d.mixed.dark)) store.mixed.dark = d.mixed.dark
+          }
+        }
+      } catch { /* 持久化不可用时静默降级为会话内状态 */ }
+      store.loaded = true
+      applyLayers()
       store.emit()
     }
 
@@ -464,7 +573,11 @@ return {
         '.dsth-del{border:none;background:transparent;color:var(--dsw-alias-state-error-primary);cursor:pointer;font-size:11px;line-height:16px;padding:2px 6px;border-radius:6px;flex:none;font:inherit}' +
         '.dsth-del:hover{background:var(--dsw-alias-interactive-bg-hover-danger)}' +
         '.dsth-foot{display:flex;align-items:center;gap:12px;padding-top:6px}' +
-        '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}'
+        '.dsth-note{color:var(--dsw-alias-label-caption);font-size:11px;line-height:16px}' +
+        '.dsth-select{flex:none;min-width:150px}' +
+        '.dsth-listitem-col{flex-direction:column;align-items:stretch;gap:6px}' +
+        '.dsth-pair{display:flex;gap:8px;align-items:center}' +
+        '.dsth-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}'
       )
       return () => {
         if (layerDisposer) { try { layerDisposer() } catch { /* ignore */ } layerDisposer = null }
@@ -486,6 +599,8 @@ return {
       const [url, setUrl] = React.useState('')
       const [pasteText, setPasteText] = React.useState('')
       const [message, setMessage] = React.useState(null)
+      const [searchQuery, setSearchQuery] = React.useState('')
+      const [searchResults, setSearchResults] = React.useState(null)
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
@@ -555,28 +670,96 @@ return {
         }
       }
 
-      const renderCard = (palette, extra) => React.createElement('div', {
-        key: palette.id,
-        className: 'dsth-card' + (store.current === palette.id ? ' dsth-selected' : ''),
-      },
-        React.createElement('div', { className: 'dsth-card-name', onClick: () => applyPalette(palette), title: '应用调色板(保持当前外观模式)' },
-          palette.label,
-          store.current === palette.id ? React.createElement('span', { className: 'dsth-badge' }, '使用中') : null,
-          extra || null
-        ),
-        React.createElement('div', { className: 'dsth-modes' },
-          ['light', 'dark'].map((mode) => React.createElement('button', {
-            key: mode,
-            className: 'dsth-mode',
-            onClick: () => { applyPalette(palette); theme.setTheme(mode) },
-          },
-            React.createElement('span', null, MODE_LABELS[mode]),
-            React.createElement('span', { className: 'dsth-swatches' },
-              SWATCH_TOKENS.map((t) => React.createElement('span', { key: t, className: 'dsth-swatch', style: { background: palette[mode][t] } }))
-            )
-          ))
+      // ---- Open VSX 搜索安装 ----
+
+      const fmtCount = (n) => n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : String(n)
+
+      const runSearch = async () => {
+        if (!searchQuery.trim()) { setMessage({ kind: 'error', text: '请输入搜索关键词' }); return }
+        setBusy('search')
+        setMessage(null)
+        try {
+          const res = await host.call('search-open-vsx', { query: searchQuery.trim() })
+          if (res && res.ok) {
+            setSearchResults(res.list || [])
+            if ((res.list || []).length === 0) setMessage({ kind: 'error', text: '没有找到匹配的扩展' })
+          } else {
+            setMessage({ kind: 'error', text: (res && res.error) || '搜索失败' })
+          }
+        } catch (e) {
+          setMessage({ kind: 'error', text: '调用失败:' + String((e && e.message) || e) })
+        }
+        setBusy('')
+      }
+
+      const installExt = async (ext) => {
+        setBusy('install-' + ext.name)
+        setMessage(null)
+        try {
+          const res = await host.call('install-open-vsx', { namespace: ext.namespace, name: ext.name, downloadUrl: ext.downloadUrl })
+          if (res && res.ok) {
+            setSearchResults(searchResults.map((e) => e === ext ? { ...e, themes: res.themes || [], installedVersion: res.version } : e))
+            setMessage({ kind: 'ok', text: '已获取「' + res.extension + '」,含 ' + (res.themes || []).length + ' 个主题' })
+          } else {
+            setMessage({ kind: 'error', text: (res && res.error) || '安装失败' })
+          }
+        } catch (e) {
+          setMessage({ kind: 'error', text: String((e && e.message) || e) })
+        }
+        setBusy('')
+      }
+
+      const importPath = async (t) => {
+        setBusy(t.path)
+        setMessage(null)
+        try {
+          const res = await host.call('read-theme-file', { path: t.path })
+          if (res && res.ok) {
+            doImport(res.text, t.label)
+          } else {
+            setMessage({ kind: 'error', text: (res && res.error) || '读取失败' })
+          }
+        } catch (e) {
+          setMessage({ kind: 'error', text: String((e && e.message) || e) })
+        }
+        setBusy('')
+      }
+
+      // ---- 渲染 ----
+
+      const paletteBadge = (palette) => {
+        if (store.current === palette.id) return '使用中'
+        if (store.mixed.light === palette.id && store.mixed.dark === palette.id) return '明暗'
+        if (store.mixed.light === palette.id) return '浅色'
+        if (store.mixed.dark === palette.id) return '深色'
+        return null
+      }
+
+      const renderCard = (palette, extra) => {
+        const badge = paletteBadge(palette)
+        return React.createElement('div', {
+          key: palette.id,
+          className: 'dsth-card' + (badge ? ' dsth-selected' : ''),
+        },
+          React.createElement('div', { className: 'dsth-card-name', onClick: () => applyPalette(palette), title: '应用调色板(保持当前外观模式)' },
+            palette.label,
+            badge ? React.createElement('span', { className: 'dsth-badge' }, badge) : null,
+            extra || null
+          ),
+          React.createElement('div', { className: 'dsth-modes' },
+            ['light', 'dark'].map((mode) => React.createElement('button', {
+              key: mode,
+              className: 'dsth-mode',
+              onClick: () => { applyPalette(palette); theme.setTheme(mode) },
+            },
+              React.createElement('span', null, MODE_LABELS[mode]),
+              React.createElement('span', { className: 'dsth-swatches' },
+                SWATCH_TOKENS.map((t) => React.createElement('span', { key: t, className: 'dsth-swatch', style: { background: palette[mode][t] } }))
+              )
+            ))
+          )
         )
-      )
+      }
 
       const scanList = scanResults && scanResults.length > 0
         ? React.createElement('div', { className: 'dsth-list' },
@@ -616,6 +799,31 @@ return {
         ),
 
         React.createElement('div', { className: 'dsth-section' },
+          React.createElement('div', { className: 'dsth-section-title' }, '明暗混合'),
+          React.createElement('div', { className: 'dsth-row' },
+            React.createElement('span', { className: 'dsth-sub' }, '浅色'),
+            React.createElement('select', {
+              className: 'dsth-input dsth-select',
+              value: store.mixed.light || '',
+              onChange: (e) => setMixed('light', e.target.value),
+            },
+              React.createElement('option', { value: '' }, '默认外观'),
+              [...PALETTES, ...store.custom].map((p) => React.createElement('option', { key: p.id, value: p.id }, p.label))
+            ),
+            React.createElement('span', { className: 'dsth-sub' }, '深色'),
+            React.createElement('select', {
+              className: 'dsth-input dsth-select',
+              value: store.mixed.dark || '',
+              onChange: (e) => setMixed('dark', e.target.value),
+            },
+              React.createElement('option', { value: '' }, '默认外观'),
+              [...PALETTES, ...store.custom].map((p) => React.createElement('option', { key: p.id, value: p.id }, p.label))
+            )
+          ),
+          React.createElement('div', { className: 'dsth-sub' }, '为浅色与深色分别指定调色板;跟随系统时按系统明暗自动切换,固定模式时仅显示对应一半。')
+        ),
+
+        React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
           React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, null)))
         ),
@@ -630,6 +838,54 @@ return {
               )
             )
           : null,
+
+        React.createElement('div', { className: 'dsth-section' },
+          React.createElement('div', { className: 'dsth-section-title' }, '搜索安装(Open VSX)'),
+          React.createElement('div', { className: 'dsth-row' },
+            React.createElement('input', {
+              className: 'dsth-input',
+              placeholder: '搜索主题扩展,如 dracula、one dark…',
+              value: searchQuery,
+              onChange: (e) => setSearchQuery(e.target.value),
+            }),
+            React.createElement('button', { className: 'dsth-btn', disabled: busy !== '', onClick: runSearch },
+              busy === 'search' ? '搜索中…' : '搜索'
+            )
+          ),
+          searchResults && searchResults.length > 0
+            ? React.createElement('div', { className: 'dsth-list' },
+                searchResults.map((ext) => React.createElement('div', { key: ext.namespace + '.' + ext.name, className: 'dsth-listitem dsth-listitem-col' },
+                  React.createElement('div', { className: 'dsth-row' },
+                    React.createElement('div', { className: 'dsth-listitem-main' },
+                      React.createElement('span', { className: 'dsth-listitem-name' }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
+                      React.createElement('span', { className: 'dsth-listitem-path' },
+                        'v' + ext.version + ' · ' + fmtCount(ext.downloadCount) + ' 次下载' + (ext.installedVersion ? ' · 已获取 v' + ext.installedVersion : '')
+                      )
+                    ),
+                    React.createElement('button', {
+                      className: 'dsth-btn',
+                      disabled: busy !== '',
+                      onClick: () => installExt(ext),
+                    }, busy === 'install-' + ext.name ? '获取中…' : (ext.themes ? '重新获取' : '获取'))
+                  ),
+                  ext.themes && ext.themes.length > 0
+                    ? React.createElement('div', { className: 'dsth-list' },
+                        ext.themes.map((t) => React.createElement('div', { key: t.path, className: 'dsth-listitem' },
+                          React.createElement('div', { className: 'dsth-listitem-main' },
+                            React.createElement('span', { className: 'dsth-listitem-name' }, t.label),
+                            React.createElement('span', { className: 'dsth-listitem-path' }, t.uiTheme || '颜色主题')
+                          ),
+                          React.createElement('button', { className: 'dsth-btn', disabled: busy !== '', onClick: () => importPath(t) }, '导入')
+                        ))
+                      )
+                    : null,
+                  ext.themes && ext.themes.length === 0
+                    ? React.createElement('div', { className: 'dsth-sub' }, '该扩展未贡献颜色主题')
+                    : null
+                ))
+              )
+            : null
+        ),
 
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '从 VS Code 导入'),
@@ -680,5 +936,8 @@ return {
       { name: 'settings.section', id: 'dsh-themes', order: 12, label: '主题' },
       () => React.createElement(ThemesPage)
     ))
+
+    // 从持久化存储恢复主题库(异步;完成后自动应用覆盖层并触发重渲染)
+    hydrate()
   },
 }
