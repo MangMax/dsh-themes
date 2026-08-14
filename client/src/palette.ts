@@ -96,7 +96,7 @@ export const DEFAULT_THEME = withVariants({ id: 'dsh-default', label: 'DSH é»˜è®
 
 export const PALETTES = [
       DEFAULT_THEME,
-      withVariants({ id: 'dsh-chat', label: 'Chat', light: chatTokens('light'), dark: chatTokens('dark') }),
+      withVariants({ id: 'dsh-chat', label: 't3 chat', light: chatTokens('light'), dark: chatTokens('dark') }),
       withVariants({ id: 'grove', label: 'Grove', light: createManagedColors('light', '#f2f8f4', '#19734a'), dark: createManagedColors('dark', '#1d2b24', '#69d69a') }),
       withVariants({ id: 'ocean', label: 'Ocean', light: createManagedColors('light', '#f2f7fb', '#2878b8'), dark: createManagedColors('dark', '#1b2938', '#70b9ee') }),
       withVariants({ id: 'ember', label: 'Ember', light: createManagedColors('light', '#fff6ef', '#c4602f'), dark: createManagedColors('dark', '#30231e', '#f39a62') }),

@@ -3,7 +3,7 @@
 DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明 / 暗 / 跟随系统外观模式、Open VSX 搜索安装、VS Code 主题导入,主题库持久化。
 
 > 主题引擎(语义角色映射、双种子生成、对比度求解、OKLCH 感知导入映射)的架构灵感来自
-> [t3code](https://github.com/pingdotgg/t3code);品牌与命名均为 DSH 自有。
+> [t3code](https://github.com/pingdotgg/t3code)
 
 ## 功能
 
