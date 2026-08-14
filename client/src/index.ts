@@ -503,10 +503,6 @@ export default {
 
       return React.createElement('div', { className: 'dsth-page' },
         React.createElement('div', { className: 'dsth-title' }, '主题'),
-        React.createElement('p', { className: 'dsth-sub' },
-          '内置主题 × 明/暗变体,支持跟随系统;可从 Open VSX 搜索安装、VS Code 扩展、URL 或粘贴 JSON 导入主题。'
-        ),
-
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, '外观模式'),
           React.createElement('div', { className: 'dsth-moderow' },
