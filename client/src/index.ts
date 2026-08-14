@@ -345,6 +345,7 @@ export default {
       const [searchResults, setSearchResults] = React.useState(null)
       const [editing, setEditing] = React.useState(null)
       const [editMode, setEditMode] = React.useState('light')
+      const editSnapshot = React.useRef(null)
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
@@ -499,6 +500,12 @@ export default {
 
       /** 打开编辑器:直接编辑传入的主题(内置主题无修改入口,仅自定义主题可编辑)。 */
       const openEditor = (palette) => {
+        editSnapshot.current = {
+          light: { ...palette.light },
+          dark: { ...palette.dark },
+          lightVariants: palette.lightVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
+          darkVariants: palette.darkVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
+        }
         setEditing(palette)
         setEditMode('light')
         applyPalette(palette)
@@ -520,6 +527,12 @@ export default {
           darkVariants: palette.darkVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
         }
         store.custom.push(copy)
+        editSnapshot.current = {
+          light: { ...copy.light },
+          dark: { ...copy.dark },
+          lightVariants: copy.lightVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
+          darkVariants: copy.darkVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
+        }
         setEditing(copy)
         setEditMode('light')
         applyPalette(copy)
@@ -539,6 +552,18 @@ export default {
         persist()
       }
 
+      /** 重置修改:恢复进入编辑器时该主题全部颜色的初始值。 */
+      const resetEdits = (palette) => {
+        const snap = editSnapshot.current
+        if (!snap) return
+        palette.light = { ...snap.light }
+        palette.dark = { ...snap.dark }
+        palette.lightVariants = snap.lightVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } }))
+        palette.darkVariants = snap.darkVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } }))
+        applyLayers()
+        persist()
+      }
+
       const renderEditor = (palette) => React.createElement('div', { className: 'dsth-page' },
         React.createElement('div', { className: 'dsth-editor-head' },
           React.createElement('button', { className: 'dsth-btn', onClick: () => setEditing(null) }, '← 返回'),
@@ -552,7 +577,12 @@ export default {
             key: m,
             className: 'dsth-modechip' + (editMode === m ? ' dsth-modechip-active' : ''),
             onClick: () => setEditMode(m),
-          }, MODE_LABELS[m]))
+          }, MODE_LABELS[m])),
+          React.createElement('button', {
+            className: 'dsth-btn',
+            title: '恢复该主题全部颜色的初始值',
+            onClick: () => resetEdits(palette),
+          }, '重置修改')
         ),
         EDITOR_GROUPS.map((group) => React.createElement('div', { key: group.id, className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, group.title),
