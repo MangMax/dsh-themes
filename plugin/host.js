@@ -161,7 +161,7 @@ return {
       return result
     }
 
-    /** 用 curl 获取文本内容(web 服务可能无可用 provider,shell + curl 始终可用)。并发安全:每次使用唯一临时文件。 */
+    /** 用 curl 获取文本内容(web 服务可能无可用 provider,shell + curl 始终可用)。并发安全:每次使用唯一临时文件;网络类错误自动重试。 */
     async function curlText(url, maxBytes) {
       const fs = ctx.get('fs')
       if (fs === undefined) throw new Error('文件系统服务不可用')
@@ -172,13 +172,28 @@ return {
       const dir = (tmp || home || '/tmp') + '/dsh-themes/curl'
       const out = dir + '/out-' + Math.random().toString(36).slice(2) + '.bin'
       await runShell('mkdir -p "' + dir + '"')
-      await runShell('curl -fsSL --max-filesize ' + maxBytes + ' -o "' + out + '" "' + url + '"')
-      try {
-        const target = await fs.resolve(out)
-        return await fs.readText(target)
-      } finally {
-        await runShell('rm -f "' + out + '"').catch(() => {})
+      // 网络类错误(连接失败/超时/TLS 握手中断等)重试,其余错误(404 等)直接抛出
+      const RETRYABLE = /exit (7|28|35|52|53|55|56)\b/
+      let lastError = null
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          await runShell('curl -fsSL --connect-timeout 10 --tlsv1.2 --max-filesize ' + maxBytes + ' -o "' + out + '" "' + url + '"')
+          const target = await fs.resolve(out)
+          const text = await fs.readText(target)
+          await runShell('rm -f "' + out + '"').catch(() => {})
+          return text
+        } catch (e) {
+          lastError = e
+          const msg = String((e && e.message) || e)
+          if (!RETRYABLE.test(msg) || attempt >= 2) {
+            await runShell('rm -f "' + out + '"').catch(() => {})
+            throw e
+          }
+          await runShell('sleep 1').catch(() => {})
+        }
       }
+      await runShell('rm -f "' + out + '"').catch(() => {})
+      throw lastError
     }
 
     // ---- search Open VSX for theme extensions (shell + curl;按类别过滤非主题扩展) ----
@@ -199,16 +214,14 @@ return {
           downloadUrl: e.files && typeof e.files.download === 'string' ? e.files.download : null,
         })).filter((e) => e.namespace && e.name && e.downloadUrl)
 
-        // 详情 API:过滤非 Themes 类扩展,并统计其贡献的颜色主题数量
+        // 详情 API:过滤非 Themes 类扩展,并统计其贡献的颜色主题数量(curlText 内部已重试)
         const kept = []
         let idx = 0
         const fetchDetail = async (entry) => {
           let detail = null
-          for (let attempt = 0; attempt < 2 && detail === null; attempt += 1) {
-            try {
-              detail = JSON.parse(await curlText('https://open-vsx.org/api/' + encodeURIComponent(entry.namespace) + '/' + encodeURIComponent(entry.name), 131072))
-            } catch { /* retry once */ }
-          }
+          try {
+            detail = JSON.parse(await curlText('https://open-vsx.org/api/' + encodeURIComponent(entry.namespace) + '/' + encodeURIComponent(entry.name), 131072))
+          } catch { /* 详情失败,保留条目但主题数未知 */ }
           if (detail === null) { kept.push({ ...entry, themeCount: -1 }); return }
           const cats = Array.isArray(detail.categories) ? detail.categories : []
           if (!cats.some((c) => /theme/i.test(String(c)))) return // 非主题类扩展,过滤
