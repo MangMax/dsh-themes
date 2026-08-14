@@ -18,10 +18,12 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 
 ## 开发
 
-源码为 **TypeScript 模块**,由 **VitePlus(`vp`)打包**为 DSH 插件函数体(平台要求单文件,`vite.config.ts` 的 `pack` 块负责 IIFE 构建与函数体包装)。
+源码为 **TypeScript 模块**,由 **VitePlus(`vp`)打包**为 DSH 插件函数体(`vite.config.ts` 的 `pack` 块负责构建)。
 
 ```bash
-vp pack          # 构建 dist/client/index.js 与 dist/host/index.js(即插件函数体)
+bash scripts/install.sh             # 一键:vp pack 构建 → 组装 npm 插件包 → dsh plugin 安装到 web profile
+bash scripts/install.sh --pack-only # 只构建并打包,不安装
+vp pack          # 仅构建 dist/client/index.cjs 与 dist/host/index.cjs
 vp check         # 语法检查
 ```
 
@@ -31,16 +33,30 @@ vp check         # 语法检查
 client/src/        # 浏览器半区(设置页 UI、调色板引擎)
   color-utils.ts   #   RGB/HSL/WCAG 对比度、双种子调色板
   oklch.ts         #   OKLCH 感知引擎(导入派生)
-  chat.ts          #   Chat 调色板(t3.chat 界面取色,颜色保持原样)
+  chat.ts          #   t3 chat 调色板(t3.chat 界面取色,颜色保持原样)
   vs-import.ts     #   VS Code 主题解析与映射
   palette.ts       #   token 清单、默认外观、内置主题
   styles.ts        #   设置页样式
-  index.ts         #   入口:状态/覆盖层/设置页/注册
+  index.ts         #   入口:状态/覆盖层/设置页/编辑器/注册
 host/src/          # Node 半区(RPC)
   util.ts          #   shell/curl 工具工厂
   index.ts         #   入口:扫描/读取/搜索/详情/安装/持久化
+scripts/
+  install.sh       #   一键构建 + 组装 npm 插件包 + 安装
 ```
 
 ## 安装
 
-在 DSH 中运行插件:`cordis_define` 的 `code.host`/`code.client` 分别取 `dist/host/index.js` 与 `dist/client/index.js`。
+方式一(从 npm registry,已发布后):
+
+```bash
+dsh plugin --profile web add dsh-themes
+```
+
+方式二(本地一键构建安装,适合开发迭代):
+
+```bash
+bash scripts/install.sh
+```
+
+两种方式安装后均需**重启 dsh web**,然后进入 **设置 → 主题** 使用。
