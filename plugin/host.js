@@ -106,7 +106,7 @@ return {
       return { ok: true, home, roots: roots.length, themes }
     })
 
-    // ---- read one theme file ----
+    // ---- read one theme file(解析 include 继承链,最多 8 层,防循环) ----
     harness.handle('read-theme-file', async (args) => {
       const fs = ctx.get('fs')
       if (fs === undefined) return { ok: false, error: '文件系统服务不可用' }
@@ -116,7 +116,38 @@ return {
         const target = await fs.resolve(path)
         const text = await fs.readText(target)
         if (text.length > 512 * 1024) return { ok: false, error: '主题文件超过 512KB 限制' }
-        return { ok: true, text }
+        // VS Code 主题可用 "include" 继承基础文件,合并后返回
+        const seen = new Set()
+        const loadChain = async (currentPath, depth) => {
+          if (depth > 8) throw new Error('include 嵌套过深')
+          if (seen.has(currentPath)) throw new Error('include 存在循环引用')
+          seen.add(currentPath)
+          const t = await fs.resolve(currentPath)
+          const rawText = await fs.readText(t)
+          if (rawText.length > 512 * 1024) throw new Error('主题文件超过 512KB 限制')
+          let raw = null
+          try { raw = JSON.parse(rawText) } catch { return null }
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+          if (typeof raw.include !== 'string') return raw
+          const slash = currentPath.lastIndexOf('/')
+          const dir = slash >= 0 ? currentPath.slice(0, slash) : '.'
+          const includePath = raw.include.startsWith('./')
+            ? dir + '/' + raw.include.slice(2)
+            : dir + '/' + raw.include
+          const base = await loadChain(includePath, depth + 1)
+          if (!base) return raw
+          return {
+            ...base,
+            ...raw,
+            colors: { ...(base.colors || {}), ...(raw.colors || {}) },
+          }
+        }
+        let finalText = text
+        try {
+          const merged = await loadChain(path, 0)
+          if (merged) finalText = JSON.stringify(merged)
+        } catch { /* include 解析失败时使用原始内容 */ }
+        return { ok: true, text: finalText }
       } catch (e) {
         return { ok: false, error: '读取失败:' + ((e && e.message) || String(e)) }
       }
@@ -185,7 +216,9 @@ return {
         } catch (e) {
           lastError = e
           const msg = String((e && e.message) || e)
-          if (!RETRYABLE.test(msg) || attempt >= 2) {
+          const httpMatch = /HTTP\/(?:1[.\d]*|2)\s+(\d{3})/.exec(msg)
+          const httpRetry = httpMatch && (httpMatch[1] === '429' || httpMatch[1] >= '500')
+          if ((!RETRYABLE.test(msg) && !httpRetry) || attempt >= 2) {
             await runShell('rm -f "' + out + '"').catch(() => {})
             throw e
           }
@@ -196,12 +229,12 @@ return {
       throw lastError
     }
 
-    // ---- search Open VSX for theme extensions (shell + curl;按类别过滤非主题扩展) ----
+    // ---- search Open VSX for theme extensions (shell + curl;category=Themes + manifest 主题数过滤) ----
     harness.handle('search-open-vsx', async (args) => {
       const query = args && typeof args.query === 'string' ? args.query.trim() : ''
       if (!query) return { ok: false, error: '请输入搜索关键词' }
       try {
-        const url = 'https://open-vsx.org/api/-/search?query=' + encodeURIComponent(query) + '&size=20&sortBy=downloadCount'
+        const url = 'https://open-vsx.org/api/-/search?query=' + encodeURIComponent(query) + '&category=Themes&size=14&sortBy=downloadCount&sortOrder=desc'
         const text = await curlText(url, 262144)
         const data = JSON.parse(text)
         const exts = Array.isArray(data.extensions) ? data.extensions : []
@@ -214,28 +247,32 @@ return {
           downloadUrl: e.files && typeof e.files.download === 'string' ? e.files.download : null,
         })).filter((e) => e.namespace && e.name && e.downloadUrl)
 
-        // 详情 API:过滤非 Themes 类扩展,并统计其贡献的颜色主题数量(curlText 内部已重试)
+        // 详情 + manifest:仅保留确实贡献了颜色主题的扩展;详情失败时保留(主题数未知),不误过滤
         const kept = []
         let idx = 0
         const fetchDetail = async (entry) => {
           let detail = null
           try {
             detail = JSON.parse(await curlText('https://open-vsx.org/api/' + encodeURIComponent(entry.namespace) + '/' + encodeURIComponent(entry.name), 131072))
-          } catch { /* 详情失败,保留条目但主题数未知 */ }
-          if (detail === null) { kept.push({ ...entry, themeCount: -1 }); return }
-          const cats = Array.isArray(detail.categories) ? detail.categories : []
-          if (!cats.some((c) => /theme/i.test(String(c)))) return // 非主题类扩展,过滤
+          } catch { /* 网络失败,保留条目 */ }
+          if (!detail || typeof detail.name !== 'string' || !detail.files || typeof detail.files !== 'object') {
+            kept.push({ ...entry, themeCount: -1 })
+            return
+          }
           let themeCount = 0
+          let manifestFailed = false
           try {
-            if (detail.files && typeof detail.files.manifest === 'string') {
+            if (typeof detail.files.manifest === 'string') {
               const manifest = JSON.parse(await curlText(detail.files.manifest, 131072))
               const contrib = manifest.contributes && manifest.contributes.themes
               themeCount = Array.isArray(contrib) ? contrib.length : 0
             }
-          } catch { /* themeCount 保持 0 */ }
+          } catch { manifestFailed = true }
+          if (manifestFailed) { kept.push({ ...entry, themeCount: -1 }); return }
+          if (themeCount === 0) return // 详情有效但未贡献颜色主题(图标主题等),过滤
           kept.push({ ...entry, themeCount })
         }
-        const workers = Math.min(5, base.length)
+        const workers = Math.min(4, base.length)
         await Promise.all(Array.from({ length: workers }, async () => {
           while (idx < base.length) {
             const entry = base[idx]
@@ -243,7 +280,7 @@ return {
             await fetchDetail(entry)
           }
         }))
-        return { ok: true, list: kept, filtered: base.length - kept.length }
+        return { ok: true, list: kept.slice(0, 10), filtered: base.length - kept.length }
       } catch (e) {
         return { ok: false, error: '搜索失败:' + ((e && e.message) || String(e)) }
       }
