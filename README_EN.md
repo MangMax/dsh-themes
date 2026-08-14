@@ -2,9 +2,14 @@
 
 English | [中文](README.md)
 
+[![npm version](https://img.shields.io/npm/v/dsh-themes.svg)](https://www.npmjs.com/package/dsh-themes)
+[![license](https://img.shields.io/npm/l/dsh-themes.svg)](https://github.com/MangMax/dsh-themes)
+
 A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light / dark / follow-system appearance modes, Open VSX search & install, VS Code theme import, persisted theme library.
 
 > The theme engine (semantic role mapping, dual-seed generation, contrast solving, OKLCH perceptual import mapping) is architecturally inspired by [t3code](https://github.com/pingdotgg/t3code).
+
+![screenshot](assets/screenshot.png)
 
 ## Features
 

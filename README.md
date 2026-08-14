@@ -2,10 +2,15 @@
 
 [English](README_EN.md) | 中文
 
+[![npm version](https://img.shields.io/npm/v/dsh-themes.svg)](https://www.npmjs.com/package/dsh-themes)
+[![license](https://img.shields.io/npm/l/dsh-themes.svg)](https://github.com/MangMax/dsh-themes)
+
 DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明 / 暗 / 跟随系统外观模式、Open VSX 搜索安装、VS Code 主题导入,主题库持久化。
 
 > 主题引擎(语义角色映射、双种子生成、对比度求解、OKLCH 感知导入映射)的架构灵感来自
 > [t3code](https://github.com/pingdotgg/t3code)
+
+![screenshot](assets/screenshot.png)
 
 ## 功能
 
