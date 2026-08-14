@@ -44,7 +44,7 @@ export const STYLES_CSS =
         '.dsth-ball-slot{width:36px;height:36px;flex:none;display:flex;align-items:center;justify-content:center}' +
         '.dsth-ball{width:20px;height:20px;border-radius:50%;display:inline-block;cursor:pointer;border:none;padding:0;transition:width .15s ease,height .15s ease;box-shadow:inset 0 0 0 1px rgba(0,0,0,0.10),0 1px 2px rgba(0,0,0,0.08)}' +
         '.dsth-ball-dark{box-shadow:inset 0 0 0 1px rgba(255,255,255,0.14),0 1px 2px rgba(0,0,0,0.18)}' +
-        '.dsth-ball-active{width:32px;height:32px}' +
+        '.dsth-ball-active{width:32px;height:32px;outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px}' +
         '.dsth-balls{display:flex;gap:6px;align-items:center;overflow-x:auto;flex:1;min-width:0;padding:2px 0;scrollbar-width:none}' +
         '.dsth-balls::-webkit-scrollbar{display:none}' +
         '.dsth-nav{flex:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--dsw-alias-border-l1);background-color:var(--dsw-alias-bg-layer-2);background-repeat:no-repeat;background-position:center;background-size:10px 10px;cursor:pointer;padding:0;font-size:0}' +

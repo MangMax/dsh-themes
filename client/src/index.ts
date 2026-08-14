@@ -38,49 +38,60 @@ export default {
     function persist() {
       if (!store.loaded) return
       host.call('persist-themes', {
-        payload: { current: store.current, mixed: store.mixed, custom: store.custom },
+        payload: { current: store.mixed.light, mixed: store.mixed, custom: store.custom },
       }).catch(() => {})
     }
 
-    /** 统一应用覆盖层:明暗混合优先,其次当前调色板,否则清除。 */
+    /** 某外观模式当前生效的主题:显式指定优先,未指定由默认主题兜底。 */
+    function ownerOf(mode) {
+      const id = store.mixed[mode]
+      return (id ? paletteById(id) : null) || DEFAULT_THEME
+    }
+
+    /** 统一应用覆盖层:明/暗各自独立归属,缺省一侧由默认主题兜底。 */
     function applyLayers() {
-      const hasMixed = !!(store.mixed.light || store.mixed.dark)
-      if (hasMixed) {
-        const lightPalette = paletteById(store.mixed.light)
-        const darkPalette = paletteById(store.mixed.dark)
-        const pairs = {}
-        for (const name of TOKEN_NAMES) {
-          pairs[name] = {
-            light: lightPalette ? lightPalette.light[name] : DEFAULT_PALETTE.light[name],
-            dark: darkPalette ? darkPalette.dark[name] : DEFAULT_PALETTE.dark[name],
-          }
+      const lightOwner = ownerOf('light')
+      const darkOwner = ownerOf('dark')
+      const pairs = {}
+      for (const name of TOKEN_NAMES) {
+        pairs[name] = {
+          light: lightOwner.light[name],
+          dark: darkOwner.dark[name],
         }
-        layerDisposer = theme.overrideTokens('dsh-themes', pairs)
-      } else if (store.current) {
-        const palette = paletteById(store.current)
-        if (!palette) {
-          store.current = null
-          store.emit()
-          return
-        }
-        const pairs = {}
-        for (const name of TOKEN_NAMES) pairs[name] = { light: palette.light[name], dark: palette.dark[name] }
-        layerDisposer = theme.overrideTokens('dsh-themes', pairs)
-      } else {
-        if (layerDisposer) { layerDisposer(); layerDisposer = null }
       }
+      layerDisposer = theme.overrideTokens('dsh-themes', pairs)
       store.emit()
     }
 
+    /** 选择单一主题:明/暗两侧都指向它(点击主题卡片)。 */
     function applyPalette(palette) {
-      store.current = palette ? palette.id : null
+      const id = palette ? palette.id : null
+      store.mixed.light = id
+      store.mixed.dark = id
+      applyLayers()
+      persist()
+    }
+
+    /** 选择某外观模式的变体:只设置该侧归属,不切换外观模式。 */
+    function selectVariant(palette, mode, variant) {
+      palette[mode] = variant.tokens
+      store.mixed[mode] = palette.id
+      applyLayers()
+      persist()
+    }
+
+    /** 恢复默认:两侧都未指定,全部由默认主题兜底。 */
+    function clearAll() {
+      store.mixed.light = null
+      store.mixed.dark = null
       applyLayers()
       persist()
     }
 
     function removeCustom(id) {
       store.custom = store.custom.filter((p) => p.id !== id)
-      if (store.current === id) store.current = 'dsh-default'
+      if (store.mixed.light === id) store.mixed.light = null
+      if (store.mixed.dark === id) store.mixed.dark = null
       applyLayers()
       persist()
     }
@@ -116,8 +127,14 @@ export default {
         if (res && res.ok && res.data) {
           const d = res.data
           if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p)).map((p) => fillPalette(p))
-          if (typeof d.current === 'string' && paletteById(d.current)) store.current = d.current
-          // 旧版的显式明暗混合(mixed)不再恢复:明暗变体选择已内置到主题卡片
+          // half 模型:优先恢复 mixed;旧版 current 转成双侧同值
+          if (d.mixed && typeof d.mixed === 'object') {
+            if (typeof d.mixed.light === 'string' && paletteById(d.mixed.light)) store.mixed.light = d.mixed.light
+            if (typeof d.mixed.dark === 'string' && paletteById(d.mixed.dark)) store.mixed.dark = d.mixed.dark
+          } else if (typeof d.current === 'string' && paletteById(d.current)) {
+            store.mixed.light = d.current
+            store.mixed.dark = d.current
+          }
         }
       } catch { /* 持久化不可用时静默降级为会话内状态 */ }
       store.loaded = true
@@ -154,12 +171,7 @@ export default {
 
     /** 设置主题某个明暗槽的变体并应用。 */
     function setVariant(palette, mode, variant) {
-      if (mode === 'light') palette.light = variant.tokens
-      else palette.dark = variant.tokens
-      if (store.current !== palette.id) store.current = palette.id
-      applyLayers()
-      persist()
-      theme.setTheme(mode)
+      selectVariant(palette, mode, variant)
     }
 
     /** 明暗变体聚合(参照 t3code variants 模型):同一扩展的所有明色文件聚合为明色槽、暗色文件聚合为暗色槽,一个主题一张卡片。 */
@@ -250,7 +262,7 @@ export default {
 
 
     /** 明暗槽变体选择器:融合色球列表,选中放大,溢出时显示左右导航箭头,悬停显示变体名。 */
-    function VariantRow({ palette, mode, variants }) {
+    function VariantRow({ palette, mode, variants, active }) {
       const ref = React.useRef(null)
       const [nav, setNav] = React.useState({ left: false, right: false })
       const updateNav = React.useCallback(() => {
@@ -304,7 +316,7 @@ export default {
         React.createElement('div', { className: 'dsth-balls', ref, onScroll: updateNav },
           variants.map((v, i) => React.createElement('span', { key: v.label + i, className: 'dsth-ball-slot' },
             React.createElement('button', {
-              className: 'dsth-ball' + (i === activeIdx ? ' dsth-ball-active' : '') + (dark ? ' dsth-ball-dark' : ''),
+              className: 'dsth-ball' + (active && i === activeIdx ? ' dsth-ball-active' : '') + (dark ? ' dsth-ball-dark' : ''),
               style: ballStyle(v.tokens),
               title: v.label,
               onClick: () => setVariant(palette, mode, v),
@@ -555,13 +567,14 @@ export default {
         ))
       )
 
-      const paletteBadge = (palette) => {
-        if (store.current === palette.id) return '使用中'
-        return null
-      }
-
       const renderCard = (palette, extra) => {
-        const badge = paletteBadge(palette)
+        const lightActive = ownerOf('light').id === palette.id
+        const darkActive = ownerOf('dark').id === palette.id
+        const badge = lightActive && darkActive
+          ? '使用中'
+          : lightActive ? '浅色'
+          : darkActive ? '暗色'
+          : null
         return React.createElement('div', {
           key: palette.id,
           className: 'dsth-card' + (badge ? ' dsth-selected' : ''),
@@ -577,7 +590,7 @@ export default {
       }
 
       const renderVariantRow = (palette, mode, variants) =>
-        React.createElement(VariantRow, { key: mode, palette, mode, variants })
+        React.createElement(VariantRow, { key: mode, palette, mode, variants, active: ownerOf(mode).id === palette.id })
 
       const renderEditButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => openEditor(p) }, '修改')
       const renderCopyButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => copyTheme(p) }, '复制')
@@ -622,7 +635,7 @@ export default {
             }, MODE_LABELS[m])),
             React.createElement('button', {
               className: 'dsth-btn',
-              onClick: () => { applyPalette(DEFAULT_THEME); theme.setTheme('system') },
+              onClick: () => { clearAll(); theme.setTheme('system') },
             }, '恢复默认主题')
           )
         ),
