@@ -4,27 +4,66 @@
 // 服务工作;与 Host 半区的 RPC 通过 connection.rpc.call('/dsh-themes', ...) 配对。
 // 调色板引擎(语义角色映射、双种子生成、对比度求解)与 VS Code 导入映射的
 // 架构灵感来自 t3code(https://github.com/pingdotgg/t3code),详见仓库 README。
+// 界面文案通过 client locale 服务本地化(命名空间 dsh-themes,见 locales.ts):
+// 跟随 DSH 语言设置(设置 → 通用 → Language),切换后自动重渲染。
 import { DEFAULT_THEME, TOKEN_NAMES, PALETTES, DEFAULT_PALETTE, CORE_TOKEN_NAMES } from './palette.js'
 import { humanizeName, parseVsCodeTheme, slugify } from './vs-import.js'
 import { STYLES_CSS } from './styles.js'
 import { NAV_ICON_CSS, installNavIconPatch } from './nav-icon.js'
+import { LOCALES } from './locales.js'
 export const PLUGIN_NAME = 'dsh-themes'
 export default {
   apply(ctx) {
     // 等待核心服务就绪后再挂载(而非 apply 时提前 return:静态 kernel 中
     // 过早 apply 会导致插件永久失效)。React 由安装脚本在 factory 顶层
     // 注入 `const React = require('react')`(__ModuleLoader__ seed word)。
-    ctx.inject(['theme', 'slots', 'connection'], (scope) => {
+    ctx.inject(['theme', 'slots', 'connection', 'locale'], (scope) => {
     const theme = scope.theme
     const slots = scope.slots
     const connection = scope.connection
+    const locale = scope.locale
 
-    /** connection RPC 失败时 error 为 { code, message, details } 信封,这里兼容字符串并取 message。 */
+    // ---- 国际化:注册词典并绑定翻译函数 ----
+    // ctx.effect 托管 register 返回的 disposer,插件停止/重载时清理词典。
+    ctx.effect(() => locale.register('dsh-themes', LOCALES))
+    const t = locale.bind('dsh-themes')
+
+    /** 本地化 Host RPC 错误:优先按稳定错误码翻译,message 中冒号后的内容作为详情透传。 */
     function errorText(res, fallback) {
       const err = res && res.error
-      if (typeof err === 'string') return err || fallback
-      return (err && err.message) || fallback
+      if (!err) return fallback
+      const msg = typeof err === 'string' ? err : (err && err.message) || ''
+      const code = (err && typeof err === 'object' && typeof err.code === 'string' && err.code !== 'bad-request')
+        ? err.code
+        : ''
+      if (code) {
+        const key = 'error.' + code
+        const localized = t(key)
+        if (localized !== key) {
+          const idx = msg.indexOf(':')
+          const detail = idx > 0 ? msg.slice(idx + 1).trim() : ''
+          return localized + (detail ? ': ' + detail : '')
+        }
+      }
+      return fallback
     }
+
+    /** 展示用的主题名映射:持久化数据语言中立,内置「DSH 默认」及副本在渲染时本地化。 */
+    function plabel(label) {
+      if (typeof label !== 'string') return label
+      if (label.endsWith(' 副本')) return plabel(label.slice(0, -3)) + ' ' + t('copySuffix')
+      if (label.startsWith('DSH 默认')) return t('defaultThemeLabel') + label.slice('DSH 默认'.length)
+      return label
+    }
+
+    /** 展示用的变体名映射:默认「浅色」/「深色」槽标签在渲染时本地化,导入主题的真实变体名保持原样。 */
+    function vlabel(label) {
+      if (label === '浅色') return t('mode.light')
+      if (label === '深色') return t('mode.dark')
+      return label
+    }
+
+    const modeLabel = (m) => t('mode.' + m)
 
     // ============================================================
     // 颜色工具:RGB/HSL 混合 + WCAG 对比度求解
@@ -120,7 +159,7 @@ export default {
     function isValidPalette(p) {
       return !!p && typeof p === 'object' && typeof p.id === 'string' && typeof p.label === 'string' &&
         p.light && typeof p.light === 'object' && p.dark && typeof p.dark === 'object' &&
-        CORE_TOKEN_NAMES.every((t) => typeof p.light[t] === 'string' && typeof p.dark[t] === 'string')
+        CORE_TOKEN_NAMES.every((tok) => typeof p.light[tok] === 'string' && typeof p.dark[tok] === 'string')
     }
 
     /** 补齐缺失的品牌 token 与变体槽(旧版库升级兼容),返回新对象。 */
@@ -176,7 +215,7 @@ export default {
     /** 解析单个 VS Code 主题文件为导入条目(不写入库)。 */
     function buildImportedEntry(text, sourceName) {
       let raw
-      try { raw = JSON.parse(text) } catch (e) { throw new Error('JSON 解析失败:' + ((e && e.message) || String(e))) }
+      try { raw = JSON.parse(text) } catch (e) { throw new Error(t('jsonParseFailed') + ':' + ((e && e.message) || String(e))) }
       const tokens = parseVsCodeTheme(raw)
       let label = ''
       for (const cand of [raw.displayName, raw.name]) {
@@ -185,7 +224,7 @@ export default {
         if (h.length > 0) { label = h; break }
       }
       if (!label && sourceName) label = humanizeName(String(sourceName).replace(/\.json$/i, '').replace(/[#?].*$/, ''))
-      label = (label || 'VS Code 主题').slice(0, 40)
+      label = (label || t('vsCodeTheme')).slice(0, 40)
       return { label, appearance: tokens.appearance, light: tokens.light, dark: tokens.dark }
     }
 
@@ -216,10 +255,10 @@ export default {
           entries.push({ ...buildImportedEntry(r.text, r.label), sourceLabel: r.label || '' })
         } catch { /* 跳过无法解析的文件 */ }
       }
-      if (entries.length === 0) throw new Error('没有可导入的主题文件')
+      if (entries.length === 0) throw new Error(t('noImportFiles'))
       const lights = entries.filter((e) => e.appearance === 'light')
       const darks = entries.filter((e) => e.appearance === 'dark')
-      if (lights.length === 0 && darks.length === 0) throw new Error('没有可导入的主题文件')
+      if (lights.length === 0 && darks.length === 0) throw new Error(t('noImportFiles'))
       const light = lights[0] ? lights[0].light : darks[0].dark
       const dark = darks[0] ? darks[0].dark : lights[0].light
       const label = (collection && collection.label) || entries[0].label
@@ -233,7 +272,7 @@ export default {
         darkVariants: darks.map((e) => ({ label: e.label, tokens: e.dark })),
       })
       applyPalette(palette)
-      return '已导入「' + palette.label + '」:明色 ' + lights.length + ' 个变体,暗色 ' + darks.length + ' 个变体'
+      return t('importedBatch', { name: palette.label, light: lights.length, dark: darks.length })
     }
 
     function importVsCodeTheme(text, sourceName) {
@@ -269,35 +308,32 @@ export default {
 
     // ---- 设置页 ----
 
-    const SWATCH_TOKENS = ['--dsw-alias-bg-base', '--dsw-alias-bg-layer-2', '--dsw-alias-brand-primary', '--dsw-alias-state-business-primary', '--dsw-alias-label-primary', '--dsw-specific-sidebar-fill']
-    const MODE_LABELS = { system: '跟随系统', light: '浅色', dark: '深色' }
-
-    /** 颜色详细参数编辑器(参照 t3code ThemeEditorPanel 的分组结构):按语义分组列出 token。 */
+    /** 颜色详细参数编辑器(参照 t3code ThemeEditorPanel 的分组结构):按语义分组列出 token。标签为字典键,渲染时经 t() 本地化。 */
     const EDITOR_GROUPS = [
-      { id: 'main', title: '主要颜色', tokens: [
-        ['--dsw-alias-bg-base', '画布背景'],
-        ['--dsw-alias-bg-layer-2', '表面'],
-        ['--dsw-alias-bg-overlay', '浮层'],
-        ['--dsw-alias-border-l1', '边框'],
-        ['--dsw-alias-label-primary', '文字主色'],
-        ['--dsw-alias-label-secondary', '文字次级'],
-        ['--dsw-specific-sidebar-fill', '侧栏'],
-        ['--dsw-alias-brand-primary', '品牌主色'],
-        ['--dsw-alias-button-info-fill', '操作按钮'],
-        ['--dsw-alias-state-business-primary', '业务主色'],
+      { id: 'main', titleKey: 'editorGroup.main', tokens: [
+        ['--dsw-alias-bg-base', 'tok.bgBase'],
+        ['--dsw-alias-bg-layer-2', 'tok.surface'],
+        ['--dsw-alias-bg-overlay', 'tok.overlay'],
+        ['--dsw-alias-border-l1', 'tok.border'],
+        ['--dsw-alias-label-primary', 'tok.textPrimary'],
+        ['--dsw-alias-label-secondary', 'tok.textSecondary'],
+        ['--dsw-specific-sidebar-fill', 'tok.sidebar'],
+        ['--dsw-alias-brand-primary', 'tok.brand'],
+        ['--dsw-alias-button-info-fill', 'tok.actionButton'],
+        ['--dsw-alias-state-business-primary', 'tok.business'],
       ] },
-      { id: 'status', title: '状态颜色', tokens: [
-        ['--dsw-alias-state-error-primary', '错误'],
-        ['--dsw-alias-state-warn-primary', '警告'],
-        ['--dsw-alias-state-success-primary', '成功'],
-        ['--dsw-static-deepseek-450', '运行中动画'],
+      { id: 'status', titleKey: 'editorGroup.status', tokens: [
+        ['--dsw-alias-state-error-primary', 'tok.error'],
+        ['--dsw-alias-state-warn-primary', 'tok.warn'],
+        ['--dsw-alias-state-success-primary', 'tok.success'],
+        ['--dsw-static-deepseek-450', 'tok.running'],
       ] },
-      { id: 'other', title: '其他', tokens: [
-        ['--dsw-specific-bubble', '气泡'],
-        ['--dsw-specific-bubble-highlight', '气泡高亮'],
-        ['--dsw-specific-sidebar-nav-item-active', '侧栏选中'],
-        ['--dsw-static-deepseek-500', '品牌深色'],
-        ['--dsw-static-deepseek-200', '品牌浅色'],
+      { id: 'other', titleKey: 'editorGroup.other', tokens: [
+        ['--dsw-specific-bubble', 'tok.bubble'],
+        ['--dsw-specific-bubble-highlight', 'tok.bubbleHighlight'],
+        ['--dsw-specific-sidebar-nav-item-active', 'tok.sidebarActive'],
+        ['--dsw-static-deepseek-500', 'tok.brandDark'],
+        ['--dsw-static-deepseek-200', 'tok.brandLight'],
       ] },
     ]
 
@@ -347,7 +383,7 @@ export default {
       }
       const activeIdx = Math.max(0, variants.findIndex((v) => v.tokens === palette[mode]))
       return React.createElement('div', { className: 'dsth-vrow' },
-        React.createElement('span', { className: 'dsth-vlabel' }, MODE_LABELS[mode]),
+        React.createElement('span', { className: 'dsth-vlabel' }, modeLabel(mode)),
         React.createElement('button', {
           className: 'dsth-nav dsth-nav-l' + (nav.left ? '' : ' dsth-nav-disabled'),
           disabled: !nav.left,
@@ -359,7 +395,7 @@ export default {
             React.createElement('button', {
               className: 'dsth-ball' + (active && i === activeIdx ? ' dsth-ball-active' : '') + (dark ? ' dsth-ball-dark' : ''),
               style: ballStyle(v.tokens),
-              title: v.label,
+              title: vlabel(v.label),
               onClick: () => setVariant(palette, mode, v),
             })
           ))
@@ -389,6 +425,8 @@ export default {
       const editSnapshot = React.useRef(null)
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
+      // 语言切换/词典注册时重渲染,界面文案即时跟随
+      React.useEffect(() => locale.subscribe(() => setTick((n) => n + 1)), [])
       const preference = snapshot.preference
 
       const runScan = async () => {
@@ -399,12 +437,12 @@ export default {
           if (res && res.ok) {
             const value = res.value || {}
             setScanResults(value.themes || [])
-            if ((value.themes || []).length === 0) setMessage({ kind: 'error', text: '未找到主题文件(扫描了 ' + value.roots + ' 个候选目录)' })
+            if ((value.themes || []).length === 0) setMessage({ kind: 'error', text: t('noThemesFound', { roots: value.roots }) })
           } else {
-            setMessage({ kind: 'error', text: errorText(res, '扫描失败') })
+            setMessage({ kind: 'error', text: errorText(res, t('scanFailed')) })
           }
         } catch (e) {
-          setMessage({ kind: 'error', text: '调用失败:' + String((e && e.message) || e) })
+          setMessage({ kind: 'error', text: t('callFailed') + ': ' + String((e && e.message) || e) })
         }
         setBusy('')
       }
@@ -417,7 +455,7 @@ export default {
           if (res && res.ok) {
             doImport(res.value.text, entry.label)
           } else {
-            setMessage({ kind: 'error', text: errorText(res, '读取失败') })
+            setMessage({ kind: 'error', text: errorText(res, t('readFailed')) })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
@@ -426,7 +464,7 @@ export default {
       }
 
       const fetchUrl = async () => {
-        if (!url.trim()) { setMessage({ kind: 'error', text: '请输入主题 JSON 的 URL' }); return }
+        if (!url.trim()) { setMessage({ kind: 'error', text: t('urlRequired') }); return }
         setBusy('url')
         setMessage(null)
         try {
@@ -435,7 +473,7 @@ export default {
             doImport(res.value.text, url.trim().split('/').pop() || 'remote')
             setUrl('')
           } else {
-            setMessage({ kind: 'error', text: errorText(res, '获取失败') })
+            setMessage({ kind: 'error', text: errorText(res, t('fetchFailed')) })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
@@ -444,31 +482,35 @@ export default {
       }
 
       const pasteImport = () => {
-        if (!pasteText.trim()) { setMessage({ kind: 'error', text: '请先粘贴主题 JSON' }); return }
-        doImport(pasteText, '粘贴的主题')
+        if (!pasteText.trim()) { setMessage({ kind: 'error', text: t('pasteRequired') }); return }
+        doImport(pasteText, t('pastedTheme'))
       }
 
       const doImport = (text, sourceName) => {
         try {
           const palette = importVsCodeTheme(text, sourceName)
-          setMessage({ kind: 'ok', text: '已导入并应用:' + palette.label })
+          setMessage({ kind: 'ok', text: t('importedApplied', { name: palette.label }) })
         } catch (e) {
-          setMessage({ kind: 'error', text: '导入失败:' + String((e && e.message) || e) })
+          setMessage({ kind: 'error', text: t('importFailed') + ': ' + String((e && e.message) || e) })
         }
       }
 
       // ---- Open VSX 搜索安装 ----
 
-      const fmtCount = (n) => n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : String(n)
+      const isZh = locale.getLocale().active === 'zh'
+      const fmtCount = (n) => {
+        if (isZh) return n >= 10000 ? (n / 10000).toFixed(1) + ' 万' : String(n)
+        return n >= 1000000 ? (n / 1000000).toFixed(1) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n)
+      }
 
       const fmtDate = (iso) => {
         if (!iso) return ''
         const d = new Date(iso)
         if (isNaN(d.getTime())) return ''
         const days = Math.floor((Date.now() - d.getTime()) / 86400000)
-        if (days <= 0) return '今天'
-        if (days === 1) return '昨天'
-        if (days < 30) return days + ' 天前'
+        if (days <= 0) return t('today')
+        if (days === 1) return t('yesterday')
+        if (days < 30) return t('daysAgo', { days })
         const p = (n) => String(n).padStart(2, '0')
         return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())
       }
@@ -476,7 +518,7 @@ export default {
       const fmtRating = (r, count) => r > 0 ? '★ ' + r.toFixed(1) + (count > 0 ? ' (' + count + ')' : '') : ''
 
       const runSearch = async () => {
-        if (!searchQuery.trim()) { setMessage({ kind: 'error', text: '请输入搜索关键词' }); return }
+        if (!searchQuery.trim()) { setMessage({ kind: 'error', text: t('searchRequired') }); return }
         setBusy('search')
         setMessage(null)
         try {
@@ -493,12 +535,12 @@ export default {
                 }
               }).catch(() => {})))
             }
-            if (list.length === 0) setMessage({ kind: 'error', text: '没有找到匹配的主题扩展' })
+            if (list.length === 0) setMessage({ kind: 'error', text: t('noMatches') })
           } else {
-            setMessage({ kind: 'error', text: errorText(res, '搜索失败') })
+            setMessage({ kind: 'error', text: errorText(res, t('searchFailed')) })
           }
         } catch (e) {
-          setMessage({ kind: 'error', text: '调用失败:' + String((e && e.message) || e) })
+          setMessage({ kind: 'error', text: t('callFailed') + ': ' + String((e && e.message) || e) })
         }
         setBusy('')
       }
@@ -518,16 +560,16 @@ export default {
             const value = res.value || {}
             const themes = value.themes || []
             if (themes.length === 0) {
-              setMessage({ kind: 'error', text: '「' + value.extension + '」未贡献颜色主题' })
+              setMessage({ kind: 'error', text: t('noColorThemes', { name: value.extension }) })
             } else {
               const summary = importBatchThemes(
-                themes.map((t) => ({ text: t.text, label: t.label })),
+                themes.map((th) => ({ text: th.text, label: th.label })),
                 { id: 'ovx-' + ext.namespace + '.' + ext.name, label: ext.displayName }
               )
               setMessage({ kind: 'ok', text: summary })
             }
           } else {
-            setMessage({ kind: 'error', text: errorText(res, '导入失败') })
+            setMessage({ kind: 'error', text: errorText(res, t('importFailed')) })
           }
         } catch (e) {
           setMessage({ kind: 'error', text: String((e && e.message) || e) })
@@ -613,31 +655,31 @@ export default {
 
       const renderEditor = (palette) => React.createElement('div', { className: 'dsth-page' },
         React.createElement('div', { className: 'dsth-editor-head' },
-          React.createElement('button', { className: 'dsth-btn', onClick: () => setEditing(null) }, '← 返回'),
+          React.createElement('button', { className: 'dsth-btn', onClick: () => setEditing(null) }, t('back')),
           React.createElement('input', {
             className: 'dsth-input dsth-edit-name',
             value: palette.label,
-            title: '主题名称(导入/复制主题可修改,内置主题仅副本可改)',
+            title: t('editNameTitle'),
             onChange: (e) => renamePalette(palette, e.target.value),
           }),
           ['light', 'dark'].map((m) => React.createElement('button', {
             key: m,
             className: 'dsth-modechip' + (editMode === m ? ' dsth-modechip-active' : ''),
             onClick: () => setEditMode(m),
-          }, MODE_LABELS[m])),
+          }, modeLabel(m))),
           React.createElement('button', {
             className: 'dsth-btn',
-            title: '恢复该主题全部颜色的初始值',
+            title: t('resetTitle'),
             onClick: () => resetEdits(palette),
-          }, '重置修改')
+          }, t('resetEdits'))
         ),
         EDITOR_GROUPS.map((group) => React.createElement('div', { key: group.id, className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, group.title),
-          group.tokens.map(([token, label]) => {
+          React.createElement('div', { className: 'dsth-section-title' }, t(group.titleKey)),
+          group.tokens.map(([token, labelKey]) => {
             const value = palette[editMode][token] || ''
             const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : '#000000'
             return React.createElement('div', { key: token, className: 'dsth-editrow' },
-              React.createElement('span', { className: 'dsth-editlabel' }, label),
+              React.createElement('span', { className: 'dsth-editlabel' }, t(labelKey)),
               React.createElement('span', { className: 'dsth-editval' }, token),
               React.createElement('input', {
                 type: 'color',
@@ -659,16 +701,16 @@ export default {
         const lightActive = ownerOf('light').id === palette.id
         const darkActive = ownerOf('dark').id === palette.id
         const badge = lightActive && darkActive
-          ? '使用中'
-          : lightActive ? '浅色'
-          : darkActive ? '暗色'
+          ? t('badge.active')
+          : lightActive ? t('badge.light')
+          : darkActive ? t('badge.dark')
           : null
         return React.createElement('div', {
           key: palette.id,
           className: 'dsth-card' + (badge ? ' dsth-selected' : ''),
         },
-          React.createElement('div', { className: 'dsth-card-name', onClick: () => applyPalette(palette), title: '应用主题(保持当前外观模式)' },
-            React.createElement('span', { className: 'dsth-card-label', title: palette.label }, palette.label),
+          React.createElement('div', { className: 'dsth-card-name', onClick: () => applyPalette(palette), title: t('applyTitle') },
+            React.createElement('span', { className: 'dsth-card-label', title: plabel(palette.label) }, plabel(palette.label)),
             badge ? React.createElement('span', { className: 'dsth-badge' }, badge) : null,
             extra || null
           ),
@@ -680,15 +722,15 @@ export default {
       const renderVariantRow = (palette, mode, variants) =>
         React.createElement(VariantRow, { key: mode, palette, mode, variants, active: ownerOf(mode).id === palette.id })
 
-      const renderEditButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => openEditor(p) }, '修改')
-      const renderCopyButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => copyTheme(p) }, '复制')
+      const renderEditButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => openEditor(p) }, t('edit'))
+      const renderCopyButton = (p) => React.createElement('button', { className: 'dsth-btn dsth-edit-btn', onClick: () => copyTheme(p) }, t('copy'))
 
       const renderCustomGrid = store.custom.length > 0
         ? React.createElement('div', { className: 'dsth-grid' },
             store.custom.map((p) => renderCard(p,
               React.createElement('div', { className: 'dsth-actions' },
                 renderEditButton(p),
-                React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, '删除')
+                React.createElement('button', { className: 'dsth-del', onClick: () => removeCustom(p.id) }, t('delete'))
               )
             ))
           )
@@ -705,40 +747,40 @@ export default {
                 className: 'dsth-btn',
                 disabled: busy === entry.path,
                 onClick: () => importLocal(entry),
-              }, busy === entry.path ? '导入中…' : '导入')
+              }, busy === entry.path ? t('importing') : t('import'))
             ))
           )
         : null
 
       if (editing) return renderEditor(editing)
       return React.createElement('div', { className: 'dsth-page' },
-        React.createElement('div', { className: 'dsth-title' }, '主题'),
+        React.createElement('div', { className: 'dsth-title' }, t('sectionLabel')),
         React.createElement('div', { className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, '外观模式'),
+          React.createElement('div', { className: 'dsth-section-title' }, t('appearanceTitle')),
           React.createElement('div', { className: 'dsth-moderow' },
             ['system', 'light', 'dark'].map((m) => React.createElement('button', {
               key: m,
               className: 'dsth-modechip' + (preference === m ? ' dsth-modechip-active' : ''),
               onClick: () => theme.setTheme(m),
-            }, MODE_LABELS[m])),
+            }, modeLabel(m))),
             React.createElement('button', {
               className: 'dsth-btn',
               onClick: () => { clearAll(); theme.setTheme('system') },
-            }, '恢复默认主题')
+            }, t('restoreDefault'))
           )
         ),
 
         React.createElement('div', { className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, '搜索安装(Open VSX)'),
+          React.createElement('div', { className: 'dsth-section-title' }, t('searchTitle')),
           React.createElement('div', { className: 'dsth-row' },
             React.createElement('input', {
               className: 'dsth-input',
-              placeholder: '搜索主题扩展,如 dracula、one dark…',
+              placeholder: t('searchPlaceholder'),
               value: searchQuery,
               onChange: (e) => setSearchQuery(e.target.value),
             }),
             React.createElement('button', { className: 'dsth-btn', disabled: busy !== '', onClick: runSearch },
-              busy === 'search' ? '搜索中…' : '搜索'
+              busy === 'search' ? t('searching') : t('search')
             )
           ),
           searchResults && searchResults.length > 0
@@ -746,12 +788,12 @@ export default {
                 searchResults.map((ext) => {
                   const detailUrl = ext.url || 'https://open-vsx.org/extension/' + ext.namespace + '/' + ext.name
                   const meta = [
-                    '作者 ' + ext.author,
+                    t('author', { name: ext.author }),
                     ext.license ? ext.license : '',
                     'v' + ext.version,
-                    fmtCount(ext.downloadCount) + ' 次下载',
+                    t('downloads', { n: fmtCount(ext.downloadCount) }),
                     fmtRating(ext.rating, ext.reviewCount),
-                    ext.timestamp ? '更新 ' + fmtDate(ext.timestamp) : '',
+                    ext.timestamp ? t('updated', { date: fmtDate(ext.timestamp) }) : '',
                   ].filter(Boolean).join(' · ')
                   return React.createElement('div', {
                     key: ext.namespace + '.' + ext.name,
@@ -762,7 +804,7 @@ export default {
                           className: 'dsth-ext-icon dsth-ext-click',
                           src: ext.icon,
                           alt: '',
-                          title: '打开扩展详情',
+                          title: t('openDetail'),
                           onClick: () => openLink(detailUrl),
                           onError: (e) => { e.target.style.display = 'none' },
                         })
@@ -770,7 +812,7 @@ export default {
                     React.createElement('div', { className: 'dsth-listitem-main' },
                       React.createElement('span', {
                         className: 'dsth-listitem-name dsth-ext-click',
-                        title: '打开扩展详情',
+                        title: t('openDetail'),
                         onClick: () => openLink(detailUrl),
                       }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
                       ext.description
@@ -780,9 +822,9 @@ export default {
                         : null,
                       React.createElement('span', { className: 'dsth-listitem-path' }, meta),
                       React.createElement('div', { className: 'dsth-ext-links' },
-                        React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(detailUrl) }, '扩展详情'),
+                        React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(detailUrl) }, t('extDetail')),
                         ext.repository
-                          ? React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(ext.repository) }, '主页/仓库')
+                          ? React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(ext.repository) }, t('extHome'))
                           : null
                       )
                     ),
@@ -790,7 +832,7 @@ export default {
                     className: 'dsth-btn',
                     disabled: busy !== '',
                     onClick: () => importExt(ext),
-                  }, busy === 'import-' + ext.name ? '导入中…' : '导入')
+                  }, busy === 'import-' + ext.name ? t('importing') : t('import'))
                   )
                 })
               )
@@ -798,64 +840,65 @@ export default {
         ),
 
         React.createElement('div', { className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, '内置调色板'),
+          React.createElement('div', { className: 'dsth-section-title' }, t('builtinTitle')),
           React.createElement('div', { className: 'dsth-grid' }, PALETTES.map((p) => renderCard(p, renderCopyButton(p))))
         ),
 
         store.custom.length > 0
           ? React.createElement('div', { className: 'dsth-section' },
-              React.createElement('div', { className: 'dsth-section-title' }, '导入的主题'),
+              React.createElement('div', { className: 'dsth-section-title' }, t('customTitle')),
               renderCustomGrid
             )
           : null,
 
         React.createElement('div', { className: 'dsth-section' },
-          React.createElement('div', { className: 'dsth-section-title' }, '从 VS Code 导入'),
+          React.createElement('div', { className: 'dsth-section-title' }, t('scanTitle')),
           React.createElement('div', { className: 'dsth-row' },
             React.createElement('input', {
               className: 'dsth-input',
-              placeholder: '扩展目录(可选,默认 ~/.vscode/extensions 等)',
+              placeholder: t('scanPlaceholder'),
               value: scanRoot,
               onChange: (e) => setScanRoot(e.target.value),
             }),
             React.createElement('button', { className: 'dsth-btn', disabled: busy === 'scan', onClick: runScan },
-              busy === 'scan' ? '扫描中…' : '扫描本地扩展'
+              busy === 'scan' ? t('scanning') : t('scan')
             )
           ),
           scanList,
           React.createElement('div', { className: 'dsth-row' },
             React.createElement('input', {
               className: 'dsth-input',
-              placeholder: '主题 JSON 的 URL(如 GitHub raw)',
+              placeholder: t('urlPlaceholder'),
               value: url,
               onChange: (e) => setUrl(e.target.value),
             }),
             React.createElement('button', { className: 'dsth-btn', disabled: busy === 'url', onClick: fetchUrl },
-              busy === 'url' ? '获取中…' : '获取并导入'
+              busy === 'url' ? t('fetching') : t('fetch')
             )
           ),
           React.createElement('textarea', {
             className: 'dsth-textarea',
-            placeholder: '或直接粘贴 *-color-theme.json 内容…',
+            placeholder: t('pastePlaceholder'),
             value: pasteText,
             onChange: (e) => setPasteText(e.target.value),
           }),
           React.createElement('div', { className: 'dsth-row' },
-            React.createElement('button', { className: 'dsth-btn', onClick: pasteImport }, '解析并导入'),
-            React.createElement('span', { className: 'dsth-sub' }, '提示:VS Code 扩展主题位于 ~/.vscode/extensions/<发布者>.<名称>/themes/ 下')
+            React.createElement('button', { className: 'dsth-btn', onClick: pasteImport }, t('parse')),
+            React.createElement('span', { className: 'dsth-sub' }, t('importHint'))
           )
         ),
 
         message ? React.createElement('div', { className: 'dsth-msg dsth-msg-' + message.kind }, message.text) : null,
 
         React.createElement('div', { className: 'dsth-foot' },
-          React.createElement('span', { className: 'dsth-note' }, '调色板与导入主题为运行时状态,停止插件后自动恢复默认外观。')
+          React.createElement('span', { className: 'dsth-note' }, t('footNote'))
         )
       )
     }
 
     slots.inject('settings.section', () => slots.register(
-      { name: 'settings.section', id: 'dsh-themes', order: 12, label: '主题' },
+      // label 使用 thunk:设置面板每次投影时重读,语言切换后导航文案即时跟随
+      { name: 'settings.section', id: 'dsh-themes', order: 12, label: () => t('sectionLabel') },
       () => React.createElement(ThemesPage)
     ))
 
