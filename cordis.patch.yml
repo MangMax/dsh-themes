@@ -1,0 +1,4 @@
+# dsh-themes bundle patch — 安装命令据此把本包加入 dsh.profile.bundles
+- insert:
+    - id: dsh-themes
+      name: 'dsh-themes'
