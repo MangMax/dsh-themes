@@ -7,6 +7,7 @@
 import { DEFAULT_THEME, TOKEN_NAMES, PALETTES, DEFAULT_PALETTE, CORE_TOKEN_NAMES } from './palette.js'
 import { humanizeName, parseVsCodeTheme, slugify } from './vs-import.js'
 import { STYLES_CSS } from './styles.js'
+import { NAV_ICON_CSS, installNavIconPatch } from './nav-icon.js'
 export const PLUGIN_NAME = 'dsh-themes'
 export default {
   apply(ctx) {
@@ -235,13 +236,16 @@ export default {
       // 静态 client 无动态 sandbox 的 styles 座位:自行注入并回收 <style> 标签
       const styleEl = document.createElement('style')
       styleEl.setAttribute('data-dsh-themes', '')
-      styleEl.textContent = STYLES_CSS
+      styleEl.textContent = STYLES_CSS + NAV_ICON_CSS
       document.head.appendChild(styleEl)
       return () => {
         if (layerDisposer) { try { layerDisposer() } catch { /* ignore */ } layerDisposer = null }
         styleEl.remove()
       }
     })
+
+    // 设置页导航图标补丁:设置面板重开时重新打标记(元素重建,观察者再次扫描)
+    ctx.effect(() => installNavIconPatch(), 'dsh-themes: settings nav icon patch')
 
     // ---- 设置页 ----
 
