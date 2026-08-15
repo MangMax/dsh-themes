@@ -5,24 +5,31 @@
 // (connection.rpc.call('/dsh-themes', method, args))调用:
 //   scan-vscode-themes  扫描本地 VS Code / Cursor 扩展目录中的主题文件
 //   read-theme-file     读取单个主题 JSON 文件(解析 include 继承链)
-//   fetch-theme-url     获取原始主题 JSON URL(经 shell + curl,不依赖 web 服务 provider)
+//   fetch-theme-url     获取原始主题 JSON URL(宿主全局 fetch,不依赖 shell/web provider)
 //   search-open-vsx     搜索 Open VSX 主题扩展(category=Themes 过滤,单次请求,含图标/评分/更新时间/描述)
 //   open-vsx-detail     异步补充扩展作者、许可证、详情与仓库链接
-//   install-open-vsx    下载 VSIX(版本缓存)、解压并直接返回贡献主题的完整 JSON(include 合并,并行)
-//   persist-themes      持久化主题库到 ~/.dsh/dsh-themes.json
-//   load-themes         读取持久化的主题库
+//   install-open-vsx    下载 VSIX(版本缓存)、内存解压(fflate)并返回贡献主题的完整 JSON(include 合并)
+//   persist-themes      持久化主题库到 ~/.dsh/dsh-themes.json(node fs 直写)
+//   load-themes         读取持久化的主题库(node fs 直读)
+//
+// 跨平台说明:网络与本地文件全部在宿主进程内完成(全局 fetch + node 内置模块),
+// 不再调用 shell 的 curl/mkdir/unzip 等 Unix 命令——这些命令在 Windows pwsh 下
+// 不可用或行为不同,是此前 Windows 上搜索报错的根因(参考 dsh-market 的同样做法)。
 import { makeShell } from './util.js'
+import { unzipSync } from 'fflate'
 export const PLUGIN_NAME = 'dsh-themes'
 export default {
   inject: ['connection'],
   apply(ctx) {
-    const { homeDir, tmpDir, runShell, curlText } = makeShell(ctx)
+    const { homeDir, tmpDir, joinPath, curlText, curlBinary, readFileSyncUtf8, readFileBytes, writeFileSyncUtf8, writeFileBytes, existsFile } = makeShell(ctx)
+    // ---- 错误返回辅助:code 为稳定错误码(Client 侧据此本地化),message 为中文原文(日志/兜底详情) ----
+    const fail = (code, message) => ({ ok: false, error: { code, message } })
     // ---- 各 RPC 方法体(与 Client 半区的 connection.rpc.call 配对) ----
     const handlers = {
       // ---- home directory discovery (for VS Code extension roots) ----
       'scan-vscode-themes': async (args) => {
         const fs = ctx.get('fs')
-        if (fs === undefined) return { ok: false, error: '文件系统服务不可用' }
+        if (fs === undefined) return fail('fs-unavailable', '文件系统服务不可用')
         const custom = args && typeof args.root === 'string' && args.root.trim() ? args.root.trim() : ''
         const roots = []
         if (custom) roots.push(custom)
@@ -33,7 +40,7 @@ export default {
           roots.push(home + '/.vscode-insiders/extensions')
           roots.push(home + '/.cursor/extensions')
         }
-        if (roots.length === 0) return { ok: false, error: '未找到扩展目录,请在输入框中填写扩展目录路径' }
+        if (roots.length === 0) return fail('scan.no-root', '未找到扩展目录,请在输入框中填写扩展目录路径')
         const themes = []
         const seen = new Set()
         for (const root of roots) {
@@ -101,13 +108,13 @@ export default {
       // ---- read one theme file(解析 include 继承链,最多 8 层,防循环) ----
       'read-theme-file': async (args) => {
         const fs = ctx.get('fs')
-        if (fs === undefined) return { ok: false, error: '文件系统服务不可用' }
+        if (fs === undefined) return fail('fs-unavailable', '文件系统服务不可用')
         const path = args && typeof args.path === 'string' ? args.path : ''
-        if (!path) return { ok: false, error: '缺少文件路径' }
+        if (!path) return fail('read.no-path', '缺少文件路径')
         try {
           const target = await fs.resolve(path)
           const text = await fs.readText(target)
-          if (text.length > 512 * 1024) return { ok: false, error: '主题文件超过 512KB 限制' }
+          if (text.length > 512 * 1024) return fail('read.too-large', '主题文件超过 512KB 限制')
           // VS Code 主题可用 "include" 继承基础文件,合并后返回
           const seen = new Set()
           const loadChain = async (currentPath, depth) => {
@@ -141,25 +148,25 @@ export default {
           } catch { /* include 解析失败时使用原始内容 */ }
           return { ok: true, text: finalText }
         } catch (e) {
-          return { ok: false, error: '读取失败:' + ((e && e.message) || String(e)) }
+          return fail('read.failed', '读取失败:' + ((e && e.message) || String(e)))
         }
       },
 
-      // ---- fetch a raw theme JSON url (shell + curl;web 服务可能无可用 provider) ----
+      // ---- fetch a raw theme JSON url (宿主全局 fetch;web 服务可能无可用 provider,不依赖它) ----
       'fetch-theme-url': async (args) => {
         const url = args && typeof args.url === 'string' ? args.url : ''
-        if (!/^https?:\/\//i.test(url)) return { ok: false, error: '仅支持 http(s) URL' }
+        if (!/^https?:\/\//i.test(url)) return fail('fetch.http-only', '仅支持 http(s) URL')
         try {
           const text = await curlText(url, 524288)
           return { ok: true, text }
         } catch (e) {
-          return { ok: false, error: '获取失败:' + ((e && e.message) || String(e)) }
+          return fail('fetch.failed', '获取失败:' + ((e && e.message) || String(e)))
         }
       },
 
       'search-open-vsx': async (args) => {
         const query = args && typeof args.query === 'string' ? args.query.trim() : ''
-        if (!query) return { ok: false, error: '请输入搜索关键词' }
+        if (!query) return fail('search.query-required', '请输入搜索关键词')
         try {
           // 单次搜索请求即返回(不再逐项 detail/manifest 预检;主题判断在导入时完成,速度优先)
           const url = 'https://open-vsx.org/api/-/search?query=' + encodeURIComponent(query) + '&category=Themes&size=12&sortBy=downloadCount&sortOrder=desc'
@@ -183,91 +190,88 @@ export default {
           })).filter((e) => e.namespace && e.name && e.downloadUrl).slice(0, 10)
           return { ok: true, list }
         } catch (e) {
-          return { ok: false, error: '搜索失败:' + ((e && e.message) || String(e)) }
+          return fail('search.failed', '搜索失败:' + ((e && e.message) || String(e)))
         }
       },
 
-      // ---- download a VSIX(带版本缓存),unzip,并直接返回贡献主题的完整 JSON(include 已合并,并行读取) ----
+      // ---- download a VSIX(版本缓存),内存解压(fflate),并直接返回贡献主题的完整 JSON(include 已合并) ----
       'install-open-vsx': async (args) => {
-        const fs = ctx.get('fs')
-        if (fs === undefined) return { ok: false, error: '文件系统服务不可用' }
         const namespace = args && typeof args.namespace === 'string' ? args.namespace : ''
         const name = args && typeof args.name === 'string' ? args.name : ''
         const url = args && typeof args.downloadUrl === 'string' ? args.downloadUrl : ''
         const version = args && typeof args.version === 'string' ? args.version : ''
-        if (!namespace || !name || !url) return { ok: false, error: '参数不完整' }
+        if (!namespace || !name || !url) return fail('install.params', '参数不完整')
         try {
-          let home = null
-          try { home = await homeDir() } catch { /* ignore */ }
-          let tmp = null
-          try { tmp = await tmpDir() } catch { /* ignore */ }
-          const dir = (tmp || home || '/tmp') + '/dsh-themes/' + namespace + '.' + name + '/' + (version || 'latest')
-          // 版本化缓存:已解压过则跳过下载,重复导入秒开
-          let cached = false
+          // 版本化缓存:原始 VSIX 字节落在系统临时目录,已缓存则跳过下载,重复导入秒开
+          const cacheDir = joinPath(tmpDir() || homeDir() || '.', 'dsh-themes', namespace + '.' + name, version || 'latest')
+          const cacheFile = joinPath(cacheDir, 'ext.vsix')
+          let bytes = null
           try {
-            const pkgTarget = await fs.resolve(dir + '/unpacked/extension/package.json')
-            const pkgInfo = await fs.stat(pkgTarget)
-            cached = pkgInfo !== undefined && pkgInfo.type === 'file'
+            if (existsFile(cacheFile)) {
+              const cached = readFileBytes(cacheFile)
+              if (cached && cached.length > 0) bytes = cached
+            }
           } catch { /* not cached */ }
-          if (!cached) {
-            await runShell('rm -rf "' + dir + '" && mkdir -p "' + dir + '"')
-            await runShell('curl -fsSL --compressed --max-filesize 20971520 -o "' + dir + '/ext.vsix" "' + url + '"')
-            await runShell('unzip -o -q "' + dir + '/ext.vsix" -d "' + dir + '/unpacked"')
+          if (bytes === null || bytes.length === 0) {
+            bytes = await curlBinary(url, 20971520)
+            try { writeFileBytes(cacheFile, bytes) } catch { /* cache best-effort */ }
           }
 
-          let pkgText = null
-          for (const candidate of [dir + '/unpacked/extension/package.json', dir + '/unpacked/package.json']) {
-            try {
-              const target = await fs.resolve(candidate)
-              const info = await fs.stat(target)
-              if (info !== undefined && info.type === 'file') {
-                pkgText = await fs.readText(target)
-                break
-              }
-            } catch { /* try next */ }
+          // 内存解压(fflate 纯 JS,Windows/macOS/Linux 行为一致,无需系统 unzip 命令)
+          let files = null
+          try {
+            files = unzipSync(bytes)
+          } catch (e) {
+            return fail('install.failed', '扩展包解压失败:' + ((e && e.message) || String(e)))
           }
-          if (pkgText === null) return { ok: false, error: '扩展包内未找到 package.json' }
+          // 解压炸弹防护:总解压体积上限 64MB
+          let totalSize = 0
+          for (const key of Object.keys(files)) totalSize += files[key] ? files[key].length : 0
+          if (totalSize > 64 * 1024 * 1024) return fail('install.failed', '扩展包解压后超过 64MB 限制')
+          const decode = (buf) => new TextDecoder().decode(buf)
+          // VSIX 标准布局为 extension/...;缺省时退回根布局
+          const findEntry = (rel) => (files['extension/' + rel] ? files['extension/' + rel] : (files[rel] || null))
+
+          let pkgText = null
+          const pkgBuf = findEntry('package.json')
+          if (pkgBuf && pkgBuf.length <= 512 * 1024) {
+            try { pkgText = decode(pkgBuf) } catch { /* ignore */ }
+          }
+          if (pkgText === null) return fail('install.no-package', '扩展包内未找到 package.json')
           let pkg = null
           try { pkg = JSON.parse(pkgText) } catch { /* tolerate */ }
           const contrib = pkg && pkg.contributes && pkg.contributes.themes
           const themes = []
           if (Array.isArray(contrib)) {
-            // 并行读取全部主题文件(含 include 合并,深度上限 8)
-            const readTheme = async (t) => {
-              if (!t || typeof t.path !== 'string' || !/\.json$/i.test(t.path)) return null
+            // 逐个主题解析(含 include 合并,深度上限 8,防循环)——全部在内存中完成
+            for (const t of contrib.slice(0, 40)) {
+              if (!t || typeof t.path !== 'string' || !/\.json$/i.test(t.path)) continue
               const rel = t.path.replace(/^\.\//, '')
               const seen = new Set()
-              const loadChain = async (currentPath, depth) => {
+              const loadChain = (currentPath, depth) => {
                 if (depth > 8 || seen.has(currentPath)) return null
                 seen.add(currentPath)
-                try {
-                  const target = await fs.resolve(currentPath)
-                  const info = await fs.stat(target)
-                  if (info === undefined || info.type !== 'file') return null
-                  const rawText = await fs.readText(target)
-                  if (rawText.length > 512 * 1024) return null
-                  let raw = null
-                  try { raw = JSON.parse(rawText) } catch { return null }
-                  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
-                  if (typeof raw.include !== 'string') return raw
-                  const slash = currentPath.lastIndexOf('/')
-                  const d = slash >= 0 ? currentPath.slice(0, slash) : '.'
-                  const includePath = raw.include.startsWith('./') ? d + '/' + raw.include.slice(2) : d + '/' + raw.include
-                  const base = await loadChain(includePath, depth + 1)
-                  if (!base) return raw
-                  return { ...base, ...raw, colors: { ...(base.colors || {}), ...(raw.colors || {}) } }
-                } catch { return null }
+                const buf = findEntry(currentPath)
+                if (!buf || buf.length > 512 * 1024) return null
+                let raw = null
+                try { raw = JSON.parse(decode(buf)) } catch { return null }
+                if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+                if (typeof raw.include !== 'string') return raw
+                const slash = currentPath.lastIndexOf('/')
+                const d = slash >= 0 ? currentPath.slice(0, slash) : '.'
+                const includePath = raw.include.startsWith('./') ? d + '/' + raw.include.slice(2) : d + '/' + raw.include
+                const base = loadChain(includePath, depth + 1)
+                if (!base) return raw
+                return { ...base, ...raw, colors: { ...(base.colors || {}), ...(raw.colors || {}) } }
               }
-              const merged = await loadChain(dir + '/unpacked/extension/' + rel, 0)
-              if (!merged) return null
-              return {
+              const merged = loadChain(rel, 0)
+              if (!merged) continue
+              themes.push({
                 label: String(t.label || rel.split('/').pop().replace(/\.json$/i, '')),
                 uiTheme: String(t.uiTheme || ''),
                 text: JSON.stringify(merged),
-              }
+              })
             }
-            const results = await Promise.all(contrib.slice(0, 40).map(readTheme))
-            for (const r of results) if (r) themes.push(r)
           }
           return {
             ok: true,
@@ -276,7 +280,7 @@ export default {
             themes,
           }
         } catch (e) {
-          return { ok: false, error: '安装失败:' + ((e && e.message) || String(e)) }
+          return fail('install.failed', '安装失败:' + ((e && e.message) || String(e)))
         }
       },
 
@@ -284,7 +288,7 @@ export default {
       'open-vsx-detail': async (args) => {
         const namespace = args && typeof args.namespace === 'string' ? args.namespace : ''
         const name = args && typeof args.name === 'string' ? args.name : ''
-        if (!namespace || !name) return { ok: false, error: '参数不完整' }
+        if (!namespace || !name) return fail('detail.params', '参数不完整')
         try {
           const detail = JSON.parse(await curlText('https://open-vsx.org/api/' + encodeURIComponent(namespace) + '/' + encodeURIComponent(name), 131072))
           let author = ''
@@ -300,45 +304,35 @@ export default {
             repository,
           }
         } catch (e) {
-          return { ok: false, error: '详情获取失败:' + ((e && e.message) || String(e)) }
+          return fail('detail.failed', '详情获取失败:' + ((e && e.message) || String(e)))
         }
       },
 
       // ---- persist theme library to ~/.dsh/dsh-themes.json ----
       'persist-themes': async (args) => {
         const payload = args && args.payload ? args.payload : null
-        if (payload === null) return { ok: false, error: '缺少数据' }
+        if (payload === null) return fail('persist.no-data', '缺少数据')
         try {
-          const json = JSON.stringify(payload)
-          const b64 = btoa(json)
-          let home = null
-          try { home = await homeDir() } catch { /* ignore */ }
-          const root = home || '/tmp'
-          await runShell('mkdir -p "' + root + '/.dsh"')
-          await runShell('printf %s "' + b64 + '" | base64 -d > "' + root + '/.dsh/dsh-themes.json"')
+          // node fs 直写(不经 shell 的 printf|base64 管道,Windows 同样可用)
+          const file = joinPath(homeDir() || tmpDir() || '.', '.dsh', 'dsh-themes.json')
+          writeFileSyncUtf8(file, JSON.stringify(payload))
           return { ok: true }
         } catch (e) {
-          return { ok: false, error: '保存失败:' + ((e && e.message) || String(e)) }
+          return fail('persist.failed', '保存失败:' + ((e && e.message) || String(e)))
         }
       },
 
       // ---- load theme library from ~/.dsh/dsh-themes.json ----
       'load-themes': async () => {
-        const fs = ctx.get('fs')
-        if (fs === undefined) return { ok: false, error: '文件系统服务不可用' }
         try {
-          let home = null
-          try { home = await homeDir() } catch { /* ignore */ }
-          const path = (home || '/tmp') + '/.dsh/dsh-themes.json'
-          const target = await fs.resolve(path)
-          const info = await fs.stat(target)
-          if (info === undefined || info.type !== 'file') return { ok: true, data: null }
-          const text = await fs.readText(target)
+          const file = joinPath(homeDir() || tmpDir() || '.', '.dsh', 'dsh-themes.json')
+          if (!existsFile(file)) return { ok: true, data: null }
+          const text = readFileSyncUtf8(file)
           let data = null
           try { data = JSON.parse(text) } catch { /* tolerate */ }
           return { ok: true, data }
         } catch (e) {
-          return { ok: false, error: '读取失败:' + ((e && e.message) || String(e)) }
+          return fail('load.failed', '读取失败:' + ((e && e.message) || String(e)))
         }
       },
     }
@@ -352,23 +346,28 @@ export default {
     // (zod 会剥掉信封外的未知字段,例如 { ok: true, list } 里的 list 会被丢弃)
     // 因此这里统一把各方法体返回的 { ok, ...data } / { ok: false, error: string }
     // 转换成官方信封,方法体本身保持不变。
-    const rpcError = (message) => ({
-      code: 'bad-request',
+    const rpcError = (code, message) => ({
+      code: String(code),
       message: String(message),
       details: { issues: [] },
     })
     ctx.connection.rpc.handle('/dsh-themes', async (method, args) => {
       const handler = handlers[method]
-      if (handler === undefined) return { ok: false, error: rpcError('未知方法:' + method) }
+      if (handler === undefined) return { ok: false, error: rpcError('unknown-method', '未知方法:' + method) }
       try {
         const result = await handler(args)
         if (result && result.ok === true) {
           const { ok, ...data } = result
           return { ok: true, value: data }
         }
-        return { ok: false, error: rpcError((result && result.error) || '调用失败') }
+        // 方法体返回 { ok: false, error: { code, message } }:code 进入信封,Client 按码本地化
+        const err = result && result.error
+        if (err && typeof err === 'object' && typeof err.code === 'string') {
+          return { ok: false, error: rpcError(err.code, (err && err.message) || err.code) }
+        }
+        return { ok: false, error: rpcError('rpc.failed', (err && err.message) || String(err) || '调用失败') }
       } catch (e) {
-        return { ok: false, error: rpcError((e && e.message) || String(e)) }
+        return { ok: false, error: rpcError('rpc.failed', (e && e.message) || String(e)) }
       }
     }, { authority: 'trusted-host' })
   },
