@@ -7,6 +7,7 @@
 import { DEFAULT_THEME, TOKEN_NAMES, PALETTES, DEFAULT_PALETTE, CORE_TOKEN_NAMES } from './palette.js'
 import { humanizeName, parseVsCodeTheme, slugify } from './vs-import.js'
 import { STYLES_CSS } from './styles.js'
+import { NAV_ICON_CSS, installNavIconPatch } from './nav-icon.js'
 export const PLUGIN_NAME = 'dsh-themes'
 export default {
   apply(ctx) {
@@ -35,6 +36,8 @@ export default {
       mixed: { light: null, dark: null },
       custom: [],
       loaded: false,
+      /** 本会话是否曾从磁盘载入/添加过自定义主题(空库覆盖磁盘旧库的防线)。 */
+      hadCustom: false,
       listeners: new Set(),
       subscribe(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn) },
       emit() { for (const fn of this.listeners) fn() },
@@ -49,6 +52,10 @@ export default {
     /** 将主题库状态持久化到 ~/.dsh/dsh-themes.json(Host 侧写入)。 */
     function persist() {
       if (!store.loaded) return
+      // 防数据丢失:本会话从未成功载入/添加过自定义主题时,拒绝用空库覆盖
+      // 磁盘上可能仍存在的旧库(load-themes 失败或返回空时触发)。用户显式
+      // 删除最后一个自定义主题(removeCustom 清空 hadCustom)除外。
+      if (store.custom.length === 0 && store.hadCustom) return
       connection.rpc.call('/dsh-themes', 'persist-themes', {
         payload: { current: store.mixed.light, mixed: store.mixed, custom: store.custom },
       }).catch(() => {})
@@ -102,6 +109,8 @@ export default {
 
     function removeCustom(id) {
       store.custom = store.custom.filter((p) => p.id !== id)
+      // 显式删除最后一个自定义主题:视为用户有意清空库,允许持久化空库
+      if (store.custom.length === 0) store.hadCustom = false
       if (store.mixed.light === id) store.mixed.light = null
       if (store.mixed.dark === id) store.mixed.dark = null
       applyLayers()
@@ -134,23 +143,32 @@ export default {
 
     /** 从持久化存储恢复主题库(异步、幂等)。 */
     async function hydrate() {
+      let ok = false
       try {
         const res = await connection.rpc.call('/dsh-themes', 'load-themes', {})
         // load-themes 方法体返回 { ok, data },经信封包装后内容在 value.data
-        const d = res && res.ok && res.value ? res.value.data : null
-        if (d) {
-          if (Array.isArray(d.custom)) store.custom = d.custom.filter((p) => isValidPalette(p)).map((p) => fillPalette(p))
-          // half 模型:优先恢复 mixed;旧版 current 转成双侧同值
-          if (d.mixed && typeof d.mixed === 'object') {
-            if (typeof d.mixed.light === 'string' && paletteById(d.mixed.light)) store.mixed.light = d.mixed.light
-            if (typeof d.mixed.dark === 'string' && paletteById(d.mixed.dark)) store.mixed.dark = d.mixed.dark
-          } else if (typeof d.current === 'string' && paletteById(d.current)) {
-            store.mixed.light = d.current
-            store.mixed.dark = d.current
+        if (res && res.ok) {
+          const d = res.value ? res.value.data : null
+          ok = true
+          if (d) {
+            if (Array.isArray(d.custom)) {
+              const raw = d.custom.filter((p) => isValidPalette(p)).map((p) => fillPalette(p))
+              store.custom = raw
+              // 磁盘上存在自定义主题即视为“持有旧库”,空库持久化必须被拦截
+              if (raw.length > 0 || (d.custom.length > 0 && raw.length === 0)) store.hadCustom = true
+            }
+            // half 模型:优先恢复 mixed;旧版 current 转成双侧同值
+            if (d.mixed && typeof d.mixed === 'object') {
+              if (typeof d.mixed.light === 'string' && paletteById(d.mixed.light)) store.mixed.light = d.mixed.light
+              if (typeof d.mixed.dark === 'string' && paletteById(d.mixed.dark)) store.mixed.dark = d.mixed.dark
+            } else if (typeof d.current === 'string' && paletteById(d.current)) {
+              store.mixed.light = d.current
+              store.mixed.dark = d.current
+            }
           }
         }
-      } catch { /* 持久化不可用时静默降级为会话内状态 */ }
-      store.loaded = true
+      } catch { /* 持久化不可用时保持 loaded=false:禁止 persist,避免用空库覆盖磁盘旧库 */ }
+      store.loaded = ok
       applyLayers()
       store.emit()
     }
@@ -179,6 +197,9 @@ export default {
       while (store.custom.some((p) => p.id === id)) id = 'vsc-' + base + '-' + n++
       const final = { ...palette, id }
       store.custom.push(final)
+      // 导入是显式写入:即便 hydrate 失败(loaded=false),也应允许持久化
+      store.loaded = true
+      store.hadCustom = true
       return final
     }
 
@@ -235,13 +256,16 @@ export default {
       // 静态 client 无动态 sandbox 的 styles 座位:自行注入并回收 <style> 标签
       const styleEl = document.createElement('style')
       styleEl.setAttribute('data-dsh-themes', '')
-      styleEl.textContent = STYLES_CSS
+      styleEl.textContent = STYLES_CSS + NAV_ICON_CSS
       document.head.appendChild(styleEl)
       return () => {
         if (layerDisposer) { try { layerDisposer() } catch { /* ignore */ } layerDisposer = null }
         styleEl.remove()
       }
     })
+
+    // 设置页导航图标补丁:设置面板重开时重新打标记(元素重建,观察者再次扫描)
+    ctx.effect(() => installNavIconPatch(), 'dsh-themes: settings nav icon patch')
 
     // ---- 设置页 ----
 
@@ -547,6 +571,9 @@ export default {
           darkVariants: palette.darkVariants.map((v) => ({ label: v.label, tokens: { ...v.tokens } })),
         }
         store.custom.push(copy)
+        // 复制是显式添加:允许持久化(与 pushImportedPalette 同策略)
+        store.loaded = true
+        store.hadCustom = true
         editSnapshot.current = {
           light: { ...copy.light },
           dark: { ...copy.dark },

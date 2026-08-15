@@ -25,6 +25,7 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 - **搜索安装(Open VSX)**:单请求搜索,展示图标/作者/许可证/评分/更新时间;悬浮名称或图标查看详情卡片,点击打开扩展页或仓库;「导入」一步完成下载、解析(include 合并)与聚合导入,版本化缓存重复导入秒开
 - **VS Code 导入**:本地扩展扫描、URL 获取、粘贴 JSON;OKLCH 感知引擎派生表面,workbench 指定值对比度门控,操作色独立于 accent
 - **状态动画色**:运行状态点阵(`--dsh-state-ongoing` → `--dsw-static-deepseek-450`)跟随主题
+- **设置页导航图标**:设置面板「主题」菜单图标替换为调色板图标(取自 reicon 图标集,https://github.com/dqev/reicon)
 - **持久化**:主题库保存到 `~/.dsh/dsh-themes.json`,重启后恢复
 
 ## 开发

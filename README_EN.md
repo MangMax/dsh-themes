@@ -24,6 +24,7 @@ A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light /
 - **Color editor (second-level page)**: rename, light/dark tabs, grouped token color pickers + hex inputs with instant effect, and "Reset edits"
 - **Open VSX search & install**: one-request search with icon/author/license/rating, description inline on cards, one-click import with versioned cache
 - **VS Code import**: local extension scan, URL fetch, paste JSON; OKLCH-aware engine derives surfaces, workbench-specified values are contrast-gated
+- **Settings nav icon**: the "Themes" entry in the settings panel gets a palette icon from the reicon icon set (https://github.com/dqev/reicon)
 - **Persistence**: theme library saved to `~/.dsh/dsh-themes.json` and restored on restart
 
 ## Development
