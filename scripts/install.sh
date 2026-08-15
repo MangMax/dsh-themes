@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.1.5"
+PKG_VER="0.1.6"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
 echo "==> [1/4] vp pack 构建"
