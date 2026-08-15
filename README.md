@@ -26,7 +26,9 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 - **VS Code 导入**:本地扩展扫描、URL 获取、粘贴 JSON;OKLCH 感知引擎派生表面,workbench 指定值对比度门控,操作色独立于 accent
 - **状态动画色**:运行状态点阵(`--dsh-state-ongoing` → `--dsw-static-deepseek-450`)跟随主题
 - **设置页导航图标**:设置面板「主题」菜单图标替换为调色板图标(取自 reicon 图标集,https://github.com/dqev/reicon)
+- **中英文界面**:设置页文案与提示跟随 DSH 语言设置(**设置 → 通用 → Language**),切换即时生效;主题库持久化数据保持语言中立,展示时自动本地化
 - **持久化**:主题库保存到 `~/.dsh/dsh-themes.json`,重启后恢复
+- **跨平台(Windows / macOS / Linux)**:网络与本地文件全部在宿主进程内完成(全局 `fetch` + node 内置模块 + `fflate` 内存解压),不依赖 shell 的 curl/mkdir/unzip 等 Unix 命令,Windows(pwsh)下同样可用
 
 ## 开发
 

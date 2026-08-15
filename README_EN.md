@@ -25,7 +25,9 @@ A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light /
 - **Open VSX search & install**: one-request search with icon/author/license/rating, description inline on cards, one-click import with versioned cache
 - **VS Code import**: local extension scan, URL fetch, paste JSON; OKLCH-aware engine derives surfaces, workbench-specified values are contrast-gated
 - **Settings nav icon**: the "Themes" entry in the settings panel gets a palette icon from the reicon icon set (https://github.com/dqev/reicon)
+- **Bilingual UI**: settings copy follows the DSH language preference (**Settings → General → Language**), switching live; persisted theme-library data stays language-neutral and is localized at render time
 - **Persistence**: theme library saved to `~/.dsh/dsh-themes.json` and restored on restart
+- **Cross-platform (Windows / macOS / Linux)**: networking and local files run entirely inside the host process (global `fetch` + node builtins + `fflate` in-memory unzip) — no dependence on shell commands like curl/mkdir/unzip, so it works under Windows (pwsh) too
 
 ## Development
 

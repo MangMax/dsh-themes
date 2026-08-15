@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.1.6"
+PKG_VER="0.1.7"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
 echo "==> [1/4] vp pack 构建"
@@ -21,10 +21,13 @@ mkdir -p "$BUILD_DIR/lib"
 # host 产物 -> 以「函数体」语义加载(产物是 var module/exports + return 插件对象的函数体)
 cp dist/host/index.cjs "$BUILD_DIR/lib/index.cjs"
 cat > "$BUILD_DIR/lib/index.js" <<'EOF'
-// dsh-themes host 入口(ESM wrapper):产物按函数体执行,返回值即插件对象
+// dsh-themes host 入口(ESM wrapper):产物按函数体执行,返回值即插件对象。
+// 注入 createRequire 产物作为 require:打包器(esbuild/tsdown)的 CJS interop
+// 助手(如 require("module"))在纯函数体作用域里没有 require,注入后才能运行。
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 const src = readFileSync(new URL('./index.cjs', import.meta.url), 'utf8')
-const plugin = new Function(src)()
+const plugin = new Function('require', src)(createRequire(import.meta.url))
 export const name = 'dsh-themes'
 export const apply = plugin.apply
 export const inject = plugin.inject
