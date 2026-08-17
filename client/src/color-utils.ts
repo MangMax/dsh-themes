@@ -166,6 +166,97 @@ export function managedAccent(value, appearance, background) {
     }
 
 
+/** 由核心色值派生 DSH 设计平台的扩展 token(表面层级、文字层级、交互反馈、
+     * Markdown、状态补充、滚动条、浮层与品牌静态色)。core 为 RGB 对象:
+     * { canvas, accent, text, textMuted, dark, surfaceRaised, surfaceOverlay,
+     *   border, input, accentForeground, buttonHover, error, warn, success }。
+     * 中性覆盖层(遮罩/反白边框/工具栏)保持 DSH 平台常量,其余按语义混合派生。 */
+export function deriveExtendedTokens(core) {
+      const { canvas, accent, text, textMuted, dark } = core
+      const { surfaceRaised, surfaceOverlay, border, input, accentForeground, buttonHover } = core
+      const { error, warn, success } = core
+      const hex = (c) => rgbToHex(c)
+      const mix = (a, b, amount) => mixRgb(a, b, amount)
+      const rgbaOf = (c, alpha) => `rgba(${Math.round(c.r)}, ${Math.round(c.g)}, ${Math.round(c.b)}, ${alpha})`
+      const towardText = (amount) => mix(canvas, text, amount)
+      const layer3 = dark ? towardText(0.14) : surfaceRaised
+      const modulePlatform = towardText(dark ? 0.14 : 0.03)
+      return {
+        '--dsw-alias-bg-layer-3': hex(layer3),
+        '--dsw-alias-bg-module-platform': hex(modulePlatform),
+        '--dsw-alias-bg-multi-select': hex(modulePlatform),
+        '--dsw-alias-bg-skeleton': dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.04)',
+        '--dsw-alias-bg-mask-1': dark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.24)',
+        '--dsw-alias-bg-mask-2': dark ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.12)',
+        '--dsw-alias-bg-mask-3': 'rgba(0, 0, 0, 0.48)',
+        '--dsw-alias-bg-mask-drop': dark ? 'rgba(39, 39, 48, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+        '--dsw-alias-bg-mask-photo': 'rgba(0, 0, 0, 0.88)',
+        '--dsw-alias-border-l3': hex(mix(border, text, 0.25)),
+        '--dsw-alias-border-l4': hex(mix(border, text, 0.4)),
+        '--dsw-alias-border-l2-darkmode-thin': hex(dark ? border : input),
+        '--dsw-alias-border-inverted': dark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0)',
+        '--dsw-alias-border-inverted2': dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0)',
+        '--dsw-alias-brand-text': hex(text),
+        '--dsw-alias-brand-primary-invert': hex(accent),
+        '--dsw-alias-brand-primary-new-colorprimary-new-color': hex(accent),
+        '--dsw-alias-button-primary-fill': hex(accent),
+        '--dsw-alias-button-primary-hover': hex(buttonHover),
+        '--dsw-alias-button-primary-dimmed': hex(mix(accent, canvas, dark ? 0.72 : 0.85)),
+        '--dsw-alias-button-contrast-fill': hex(dark ? text : textMuted),
+        '--dsw-alias-button-elevated-fill': hex(dark ? surfaceOverlay : canvas),
+        '--dsw-alias-button-floating-fill': hex(dark ? surfaceRaised : canvas),
+        '--dsw-alias-button-floating-hover': hex(dark ? layer3 : towardText(0.045)),
+        '--dsw-alias-button-ghost-active-fill': hex(towardText(dark ? 0.19 : 0.08)),
+        '--dsw-alias-button-ghost-active-border': hex(towardText(0.45)),
+        '--dsw-alias-button-ghost-active-hover': hex(towardText(dark ? 0.33 : 0.09)),
+        '--dsw-alias-button-tool-bar-fill': 'rgba(84, 85, 87, 0.5)',
+        '--dsw-alias-button-tool-bar-fill-invisible': 'rgba(31, 31, 31, 0.36)',
+        '--dsw-alias-button-tool-bar-hover': 'rgba(84, 85, 87, 0.6)',
+        '--dsw-alias-interactive-bg-hover': dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+        '--dsw-alias-interactive-bg-active': dark ? 'rgba(255, 255, 255, 0.14)' : 'rgba(0, 0, 0, 0.1)',
+        '--dsw-alias-interactive-bg-hover-accent': dark ? 'rgba(255, 255, 255, 0.24)' : 'rgba(0, 0, 0, 0.14)',
+        '--dsw-alias-interactive-bg-hover-danger': rgbaOf(error, dark ? 0.15 : 0.05),
+        '--dsw-alias-interactive-bg-hover-solid': hex(dark ? layer3 : towardText(0.045)),
+        '--dsw-alias-label-tertiary': hex(mix(textMuted, canvas, 0.15)),
+        '--dsw-alias-label-caption': hex(mix(textMuted, canvas, 0.5)),
+        '--dsw-alias-label-dimmed': hex(mix(textMuted, canvas, 0.75)),
+        '--dsw-alias-label-primary-dimmed': hex(text),
+        '--dsw-alias-label-primary-foreground': hex(accentForeground),
+        '--dsw-alias-label-primary-inverted': hex(accentForeground),
+        '--dsw-alias-label-primary-bluish': hex(dark ? mix(accent, WHITE_FG, 0.15) : mix(accent, BLACK_FG, 0.3)),
+        '--dsw-alias-markdown-code-block': hex(towardText(0.03)),
+        '--dsw-alias-markdown-code-block-banner': hex(dark ? surfaceRaised : towardText(0.03)),
+        '--dsw-alias-markdown-inline-code': hex(towardText(dark ? 0.12 : 0.08)),
+        '--dsw-alias-markdown-citation': hex(towardText(dark ? 0.14 : 0.08)),
+        '--dsw-alias-markdown-placeholder': hex(towardText(dark ? 0.12 : 0.04)),
+        '--dsw-alias-markdown-tag': hex(towardText(dark ? 0.12 : 0.055)),
+        '--dsw-alias-markdown-code-segment-selected': hex(dark ? layer3 : canvas),
+        '--dsw-alias-markdown-code-segment-unselected': hex(towardText(dark ? 0.03 : 0.055)),
+        '--dsw-alias-scrollbar-bg-l1': hex(towardText(dark ? 0.16 : 0.1)),
+        '--dsw-alias-scrollbar-bg-l2': hex(towardText(dark ? 0.16 : 0.1)),
+        '--dsw-alias-scrollbar-hover-l1': hex(towardText(dark ? 0.28 : 0.18)),
+        '--dsw-alias-scrollbar-hover-l2': hex(towardText(dark ? 0.28 : 0.18)),
+        '--dsw-alias-state-error-secondary': hex(dark ? error : mix(error, canvas, 0.35)),
+        '--dsw-alias-state-warn-label': hex(mix(warn, BLACK_FG, 0.13)),
+        '--dsw-alias-state-warn-secondary': hex(dark ? mix(warn, WHITE_FG, 0.15) : mix(warn, canvas, 0.15)),
+        '--dsw-alias-state-warn-tertiary': hex(mix(warn, canvas, 0.92)),
+        '--dsw-alias-state-success-secondary': hex(dark ? mix(success, WHITE_FG, 0.2) : mix(success, canvas, 0.2)),
+        '--dsw-alias-state-success-tertiary': hex(mix(success, canvas, 0.8)),
+        '--dsw-alias-toast-bg': hex(towardText(dark ? 0.2 : 0.85)),
+        '--dsw-alias-tooltip-bg': hex(towardText(dark ? 0.2 : 0.87)),
+        '--dsw-specific-menu': hex(layer3),
+        '--dsw-specific-selector': hex(towardText(dark ? 0.14 : 0.04)),
+        '--dsw-specific-input-major': hex(dark ? surfaceRaised : canvas),
+        '--dsw-specific-login-input': hex(towardText(dark ? 0.03 : 0.025)),
+        '--dsw-specific-tip': hex(towardText(dark ? 0.14 : 0.04)),
+        '--dsw-specific-sidebar-nav-item-hover': hex(dark ? surfaceRaised : towardText(0.055)),
+        '--dsw-static-blue-400': hex(mix(accent, WHITE_FG, 0.2)),
+        '--dsw-static-blue-450': hex(mix(accent, WHITE_FG, 0.1)),
+        '--dsw-static-blue-500': hex(accent),
+      }
+    }
+
+
 export function createManagedColors(appearance, bgSeed, accentSeed, exactSeeds) {
       const canvas = exactSeeds
         ? parseHex(bgSeed, { r: 250, g: 245, b: 250 })
@@ -217,6 +308,14 @@ export function createManagedColors(appearance, bgSeed, accentSeed, exactSeeds) 
         '--dsw-static-deepseek-450': rgbToHex(accent),
         '--dsw-specific-bubble': rgbToHex(bubble),
         '--dsw-specific-bubble-highlight': rgbToHex(bubbleHighlight),
+        ...deriveExtendedTokens({
+          canvas, accent, text, textMuted, dark,
+          surfaceRaised, surfaceOverlay, border, input,
+          accentForeground, buttonHover,
+          error: parseHex(status.error, { r: 236, g: 19, b: 19 }),
+          warn: parseHex(status.warning, { r: 245, g: 158, b: 11 }),
+          success: parseHex(status.success, { r: 34, g: 197, b: 94 }),
+        }),
       }
     }
 

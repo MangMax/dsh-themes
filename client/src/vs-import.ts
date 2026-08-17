@@ -1,6 +1,7 @@
 // VS Code 主题导入(映射逻辑受 t3code vscodeThemeImport 启发)
 import { luminance, contrastRatio, mixRgb, readableForeground, parseHex, rgbToHex, LIGHT_FG, WHITE_FG, BLACK_FG } from './color-utils.js'
 import { createVividColors } from './oklch.js'
+import { EXTENDED_TOKEN_NAMES } from './palette.js'
 export function parseVsCodeColor(value) {
       if (typeof value !== 'string') return null
       const trimmed = value.trim()
@@ -133,6 +134,20 @@ export function parseVsCodeTheme(raw) {
           '--dsw-static-deepseek-450': actionHex || d['--dsw-static-deepseek-450'],
           '--dsw-specific-bubble': d['--dsw-specific-bubble'],
           '--dsw-specific-bubble-highlight': d['--dsw-specific-bubble-highlight'],
+          // 扩展 token:优先取 VS Code workbench 指定值(对比度门控),缺失时用派生值
+          ...Object.fromEntries(EXTENDED_TOKEN_NAMES.map((token) => [token, d[token]])),
+          '--dsw-alias-bg-layer-3': solidOver(canvasRgb, 'editorWidget.background') || d['--dsw-alias-bg-layer-3'],
+          '--dsw-specific-menu': solidOver(canvasRgb, 'menu.background', 'quickInput.background') || d['--dsw-specific-menu'],
+          '--dsw-specific-selector': solidOver(canvasRgb, 'list.hoverBackground', 'dropdown.background') || d['--dsw-specific-selector'],
+          '--dsw-specific-input-major': solidOver(canvasRgb, 'input.background') || d['--dsw-specific-input-major'],
+          '--dsw-alias-interactive-bg-hover': solidOver(canvasRgb, 'list.hoverBackground') || d['--dsw-alias-interactive-bg-hover'],
+          '--dsw-alias-interactive-bg-active': solidOver(canvasRgb, 'list.activeSelectionBackground') || d['--dsw-alias-interactive-bg-active'],
+          '--dsw-alias-label-tertiary': readableOn(canvasHex, d['--dsw-alias-label-tertiary'], 'input.placeholderForeground', 'icon.foreground'),
+          '--dsw-alias-label-caption': readableOn(canvasHex, d['--dsw-alias-label-caption'], 'disabledForeground'),
+          '--dsw-alias-markdown-code-block': solidOver(canvasRgb, 'textCodeBlock.background') || d['--dsw-alias-markdown-code-block'],
+          '--dsw-alias-markdown-inline-code': solidOver(canvasRgb, 'textCodeBlock.background') || d['--dsw-alias-markdown-inline-code'],
+          '--dsw-alias-state-error-secondary': readableOn(canvasHex, d['--dsw-alias-state-error-secondary'], 'editorError.foreground'),
+          '--dsw-alias-state-warn-label': readableOn(canvasHex, d['--dsw-alias-state-warn-label'], 'editorWarning.foreground'),
         }
       }
       return { light: buildTokens('light'), dark: buildTokens('dark'), appearance }

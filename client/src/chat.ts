@@ -1,6 +1,8 @@
 // Chat 调色板(手调字面色值,取自 t3.chat 界面的取色记录;颜色保持原样,不冠 DSH 品牌)
+import { parseHex, readableForeground, deriveExtendedTokens } from './color-utils.js'
 export function chatTokens(mode) {
-      return mode === 'dark'
+      const dark = mode === 'dark'
+      const base = dark
         ? {
             '--dsw-alias-bg-base': '#1f1a24',
             '--dsw-alias-bg-layer-1': '#29232d',
@@ -53,6 +55,28 @@ export function chatTokens(mode) {
             '--dsw-specific-bubble': '#f7def2',
             '--dsw-specific-bubble-highlight': '#f1c4e6',
           }
+      // 扩展 token 由手调核心值按同一派生引擎补齐,保持与其它主题一致的覆盖范围
+      const C = (token) => parseHex(base[token], { r: 128, g: 128, b: 128 })
+      const accent = C('--dsw-alias-brand-primary')
+      return {
+        ...base,
+        ...deriveExtendedTokens({
+          canvas: C('--dsw-alias-bg-base'),
+          accent,
+          text: C('--dsw-alias-label-primary'),
+          textMuted: C('--dsw-alias-label-secondary'),
+          dark,
+          surfaceRaised: C('--dsw-alias-bg-layer-2'),
+          surfaceOverlay: C('--dsw-alias-bg-overlay'),
+          border: C('--dsw-alias-border-l1'),
+          input: C('--dsw-alias-border-l2'),
+          accentForeground: readableForeground(accent),
+          buttonHover: C('--dsw-alias-button-info-hover'),
+          error: C('--dsw-alias-state-error-primary'),
+          warn: C('--dsw-alias-state-warn-primary'),
+          success: C('--dsw-alias-state-success-primary'),
+        }),
+      }
     }
 
     // ---- VS Code 主题导入(映射逻辑受 t3code vscodeThemeImport 启发) ----

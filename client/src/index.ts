@@ -169,11 +169,17 @@ export default {
         out.light[t] = typeof p.light[t] === 'string' ? p.light[t] : DEFAULT_PALETTE.light[t]
         out.dark[t] = typeof p.dark[t] === 'string' ? p.dark[t] : DEFAULT_PALETTE.dark[t]
       }
+      // 变体槽同样补齐 token(旧版库的变体只含核心 token 子集,选中后会因缺键破坏覆盖层)
+      const fillVariantTokens = (tokens, fallback) => {
+        const filled = {}
+        for (const t of TOKEN_NAMES) filled[t] = typeof tokens[t] === 'string' ? tokens[t] : fallback[t]
+        return filled
+      }
       out.lightVariants = Array.isArray(p.lightVariants) && p.lightVariants.length > 0
-        ? p.lightVariants
+        ? p.lightVariants.map((v) => ({ ...v, tokens: fillVariantTokens(v.tokens || {}, out.light) }))
         : [{ label: '浅色', tokens: out.light }]
       out.darkVariants = Array.isArray(p.darkVariants) && p.darkVariants.length > 0
-        ? p.darkVariants
+        ? p.darkVariants.map((v) => ({ ...v, tokens: fillVariantTokens(v.tokens || {}, out.dark) }))
         : [{ label: '深色', tokens: out.dark }]
       if (p.collection && typeof p.collection.id === 'string') out.collection = p.collection
       if (p.imported) out.imported = true
@@ -334,6 +340,56 @@ export default {
         ['--dsw-specific-sidebar-nav-item-active', 'tok.sidebarActive'],
         ['--dsw-static-deepseek-500', 'tok.brandDark'],
         ['--dsw-static-deepseek-200', 'tok.brandLight'],
+      ] },
+      { id: 'surface', titleKey: 'editorGroup.surface', tokens: [
+        ['--dsw-alias-bg-layer-3', 'tok.layer3'],
+        ['--dsw-alias-bg-module-platform', 'tok.modulePlatform'],
+        ['--dsw-alias-bg-multi-select', 'tok.multiSelect'],
+        ['--dsw-specific-menu', 'tok.menu'],
+        ['--dsw-specific-selector', 'tok.selector'],
+        ['--dsw-specific-input-major', 'tok.inputMajor'],
+        ['--dsw-specific-login-input', 'tok.loginInput'],
+        ['--dsw-specific-tip', 'tok.tip'],
+        ['--dsw-specific-sidebar-nav-item-hover', 'tok.sidebarNavHover'],
+      ] },
+      { id: 'labels', titleKey: 'editorGroup.labels', tokens: [
+        ['--dsw-alias-label-tertiary', 'tok.textTertiary'],
+        ['--dsw-alias-label-caption', 'tok.textCaption'],
+        ['--dsw-alias-label-dimmed', 'tok.textDimmed'],
+        ['--dsw-alias-label-primary-foreground', 'tok.textOnBrand'],
+        ['--dsw-alias-label-primary-inverted', 'tok.textInverted'],
+        ['--dsw-alias-label-primary-bluish', 'tok.textBluish'],
+      ] },
+      { id: 'interactive', titleKey: 'editorGroup.interactive', tokens: [
+        ['--dsw-alias-interactive-bg-hover', 'tok.interactiveHover'],
+        ['--dsw-alias-interactive-bg-active', 'tok.interactiveActive'],
+        ['--dsw-alias-interactive-bg-hover-accent', 'tok.interactiveHoverAccent'],
+        ['--dsw-alias-interactive-bg-hover-danger', 'tok.interactiveHoverDanger'],
+        ['--dsw-alias-interactive-bg-hover-solid', 'tok.interactiveHoverSolid'],
+      ] },
+      { id: 'markdown', titleKey: 'editorGroup.markdown', tokens: [
+        ['--dsw-alias-markdown-code-block', 'tok.codeBlock'],
+        ['--dsw-alias-markdown-code-block-banner', 'tok.codeBlockBanner'],
+        ['--dsw-alias-markdown-inline-code', 'tok.inlineCode'],
+        ['--dsw-alias-markdown-citation', 'tok.citation'],
+        ['--dsw-alias-markdown-placeholder', 'tok.placeholder'],
+        ['--dsw-alias-markdown-tag', 'tok.tag'],
+        ['--dsw-alias-markdown-code-segment-selected', 'tok.codeSegmentSelected'],
+        ['--dsw-alias-markdown-code-segment-unselected', 'tok.codeSegmentUnselected'],
+      ] },
+      { id: 'states', titleKey: 'editorGroup.states', tokens: [
+        ['--dsw-alias-state-error-secondary', 'tok.errorSecondary'],
+        ['--dsw-alias-state-warn-label', 'tok.warnLabel'],
+        ['--dsw-alias-state-warn-secondary', 'tok.warnSecondary'],
+        ['--dsw-alias-state-warn-tertiary', 'tok.warnTertiary'],
+        ['--dsw-alias-state-success-secondary', 'tok.successSecondary'],
+        ['--dsw-alias-state-success-tertiary', 'tok.successTertiary'],
+      ] },
+      { id: 'chrome', titleKey: 'editorGroup.chrome', tokens: [
+        ['--dsw-alias-toast-bg', 'tok.toast'],
+        ['--dsw-alias-tooltip-bg', 'tok.tooltip'],
+        ['--dsw-alias-scrollbar-bg-l1', 'tok.scrollbarBg'],
+        ['--dsw-alias-scrollbar-hover-l1', 'tok.scrollbarHover'],
       ] },
     ]
 
