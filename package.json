@@ -1,6 +1,6 @@
 {
   "name": "dsh-themes",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
   "description": "Appearance & themes plugin for DSH (DeepSeek Harness): built-in palettes, light/dark/system mode, and VS Code theme import.",
   "license": "MIT",

@@ -7,7 +7,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.1.7"
+PKG_VER="0.1.8"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
 echo "==> [1/4] vp pack 构建"
@@ -103,6 +103,7 @@ dsh plugin --profile web add dsh-themes
 - 内置调色板(DSH 默认 / t3 chat / Grove / Ocean / Ember / Iris),明/暗独立归属,缺省一侧由默认主题兜底
 - Open VSX 搜索一键导入主题扩展;VS Code 扩展 / URL / 粘贴 JSON 导入
 - 颜色详细参数编辑器:明暗切换 + 分组 token 色块与 hex 编辑,即时生效,支持改名与重置
+- 完整覆盖 DSH 设计平台 95 个颜色 token(表面/文字/交互/状态/Markdown/滚动条/浮层等)
 - 主题持久化(`~/.dsh/dsh-themes.json`)
 
 ## 开发
@@ -134,6 +135,7 @@ Restart dsh web, then use it under **Settings → Themes**.
 - Built-in palettes (DSH Default / t3 chat / Grove / Ocean / Ember / Iris) with independent light/dark owners; unspecified sides fall back to the default theme
 - One-click Open VSX search & import; VS Code extension / URL / paste-JSON import
 - Color editor: light/dark tabs, grouped token pickers + hex inputs with instant effect, rename and reset support
+- Full coverage of the DSH design platform's 95 color tokens (surfaces / labels / interactive / status / markdown / scrollbars / overlays, etc.)
 - Persisted theme library (`~/.dsh/dsh-themes.json`)
 
 ## Development
