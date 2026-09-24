@@ -1,7 +1,10 @@
 // DSH 主题 (dsh-themes) — Client 入口
 // 本文件由 VitePlus(vp pack)打包为 IIFE 并包装成 __ModuleLoader__ factory。
 // 以 profile bundle(静态插件)方式挂载:通过注入的 theme / slots / connection
-// 服务工作;与 Host 半区的 RPC 通过 connection.rpc.call('/dsh-themes', ...) 配对。
+// 服务工作;与 Host 半区的 RPC 通过 connection.rpc.call('/api', 'dsh-themes', …)
+// 调用 connection 的精确 Fetch 路由 /api/dsh-themes 配对
+// (DSH ≥0.1.7 起 connection.rpc.handle 需要消费方注入 webServer,故 Host 侧改用
+//  connection.fetch.register;报文仍是 connection 的 RPC 信封,Client 侧调用方式不变)。
 // 调色板引擎(语义角色映射、双种子生成、对比度求解)与 VS Code 导入映射的
 // 架构灵感来自 t3code(https://github.com/pingdotgg/t3code),详见仓库 README。
 // 界面文案通过 client locale 服务本地化(命名空间 dsh-themes,见 locales.ts):
@@ -22,6 +25,14 @@ export default {
     const slots = scope.slots
     const connection = scope.connection
     const locale = scope.locale
+
+    // ---- Host RPC ----
+    // Host 半区把方法注册在 connection 的精确 Fetch 路由 /api/dsh-themes 上,
+    // 因此这里走 /api 共享通道的 'dsh-themes' 端点(路径 api/dsh-themes),
+    // 报文仍是 connection 的 RPC 信封;返回 { ok, value } | { ok: false, error }。
+    const RPC_CHANNEL = '/api'
+    const RPC_ENDPOINT = 'dsh-themes'
+    const rpc = (method, args) => connection.rpc.call(RPC_CHANNEL, RPC_ENDPOINT, { method, args })
 
     // ---- 国际化:注册词典并绑定翻译函数 ----
     // ctx.effect 托管 register 返回的 disposer,插件停止/重载时清理词典。
@@ -95,7 +106,7 @@ export default {
       // 磁盘上可能仍存在的旧库(load-themes 失败或返回空时触发)。用户显式
       // 删除最后一个自定义主题(removeCustom 清空 hadCustom)除外。
       if (store.custom.length === 0 && store.hadCustom) return
-      connection.rpc.call('/dsh-themes', 'persist-themes', {
+      rpc('persist-themes', {
         payload: { current: store.mixed.light, mixed: store.mixed, custom: store.custom },
       }).catch(() => {})
     }
@@ -190,7 +201,7 @@ export default {
     async function hydrate() {
       let ok = false
       try {
-        const res = await connection.rpc.call('/dsh-themes', 'load-themes', {})
+        const res = await rpc('load-themes', {})
         // load-themes 方法体返回 { ok, data },经信封包装后内容在 value.data
         if (res && res.ok) {
           const d = res.value ? res.value.data : null
@@ -489,7 +500,7 @@ export default {
         setBusy('scan')
         setMessage(null)
         try {
-          const res = await connection.rpc.call('/dsh-themes', 'scan-vscode-themes', { root: scanRoot })
+          const res = await rpc('scan-vscode-themes', { root: scanRoot })
           if (res && res.ok) {
             const value = res.value || {}
             setScanResults(value.themes || [])
@@ -507,7 +518,7 @@ export default {
         setBusy(entry.path)
         setMessage(null)
         try {
-          const res = await connection.rpc.call('/dsh-themes', 'read-theme-file', { path: entry.path })
+          const res = await rpc('read-theme-file', { path: entry.path })
           if (res && res.ok) {
             doImport(res.value.text, entry.label)
           } else {
@@ -524,7 +535,7 @@ export default {
         setBusy('url')
         setMessage(null)
         try {
-          const res = await connection.rpc.call('/dsh-themes', 'fetch-theme-url', { url: url.trim() })
+          const res = await rpc('fetch-theme-url', { url: url.trim() })
           if (res && res.ok) {
             doImport(res.value.text, url.trim().split('/').pop() || 'remote')
             setUrl('')
@@ -578,13 +589,13 @@ export default {
         setBusy('search')
         setMessage(null)
         try {
-          const res = await connection.rpc.call('/dsh-themes', 'search-open-vsx', { query: searchQuery.trim() })
+          const res = await rpc('search-open-vsx', { query: searchQuery.trim() })
           if (res && res.ok) {
             const list = (res.value && res.value.list) || []
             setSearchResults(list)
             // 作者/许可证需详情接口,后台异步补充,不阻塞搜索展示
             if (list.length > 0) {
-              Promise.all(list.map((ext) => connection.rpc.call('/dsh-themes', 'open-vsx-detail', { namespace: ext.namespace, name: ext.name }).then((d) => {
+              Promise.all(list.map((ext) => rpc('open-vsx-detail', { namespace: ext.namespace, name: ext.name }).then((d) => {
                 const detail = d && d.ok ? d.value : null
                 if (detail) {
                   setSearchResults((prev) => prev.map((e) => e === ext ? { ...e, author: detail.author || e.author, license: detail.license || e.license, url: detail.url || e.url || '', repository: detail.repository || '' } : e))
@@ -606,7 +617,7 @@ export default {
         setBusy('import-' + ext.name)
         setMessage(null)
         try {
-          const res = await connection.rpc.call('/dsh-themes', 'install-open-vsx', {
+          const res = await rpc('install-open-vsx', {
             namespace: ext.namespace,
             name: ext.name,
             downloadUrl: ext.downloadUrl,

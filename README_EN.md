@@ -15,6 +15,19 @@ A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light /
 
 ![screenshot](assets/screenshot.png)
 
+## Compatibility
+
+- Requires DSH `>=0.1.5-rc.1 <0.2.0` (declared through `peerDependencies`, which DSH's plugin compatibility gate evaluates)
+- Verified on **0.1.7-rc.2** (current latest) and on 0.1.5-rc.2
+- The Host half no longer uses `connection.rpc.handle`; it registers the exact Fetch route
+  `/api/dsh-themes` through `connection.fetch.register`, so DSH's own `/api` prefix route forwards it
+  with the trusted-host fence and browser-session authentication attached — no consumer-side `webServer`
+  injection required. Since 0.1.7, `connection.rpc.handle` attaches the route to Connection's own fiber
+  (`owner.effect(() => owner.webServer.register(…))`), so a consumer call throws
+  `cannot get property "webServer" without inject`
+- Therefore the old `inject: [webRuntime, webServer]` addition on the `connection` row in a profile's
+  `cordis.patch.yml` is **no longer needed** and can be removed since 0.1.9
+
 ## Features
 
 - **Theme card model**: each theme has light/dark variant slots aggregating all variants of that side; imported extensions become one theme card
@@ -37,6 +50,7 @@ Source is modular **TypeScript** bundled by **VitePlus (`vp`)** into DSH plugin 
 ```bash
 bash scripts/install.sh              # one-click: vp pack → assemble npm plugin package → dsh plugin install to web profile
 bash scripts/install.sh --pack-only  # build & pack only, no install
+DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # install into another profile (default: web)
 vp pack                              # build only (dist/client/index.cjs & dist/host/index.cjs)
 vp check                             # syntax check
 ```
