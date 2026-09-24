@@ -16,6 +16,18 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 
 ![screenshot](assets/screenshot.png)
 
+## 兼容性
+
+- 需要 DSH `>=0.1.5-rc.1 <0.2.0`(通过 `peerDependencies` 声明,DSH 的插件兼容性门禁据此判定)
+- 已在 **0.1.7-rc.2**(当前最新)与 0.1.5-rc.2 上验证
+- Host 半区不再使用 `connection.rpc.handle`,改为 `connection.fetch.register` 注册精确 Fetch 路由
+  `/api/dsh-themes`:该路由由 DSH 自有的 `/api` 前置路由转发,自带 trusted-host 检查与浏览器会话鉴权,
+  且不需要消费方注入 `webServer`。0.1.7 起 `connection.rpc.handle` 会把路由挂到 connection 插件自身的
+  fiber 上(`owner.effect(() => owner.webServer.register(…))`),消费方调用即抛
+  `cannot get property "webServer" without inject`
+- 因此 **不再需要** 在 profile 的 `cordis.patch.yml` 里给 `connection` 行补
+  `inject: [webRuntime, webServer]`(0.1.5 时代的临时绕行补丁,0.1.9 起可删除)
+
 ## 功能
 
 - **主题卡片模型**:每个主题含明色/暗色两个变体槽,槽内聚合全部明色/暗色变体可选;导入的扩展聚合为一个主题卡片
@@ -38,6 +50,7 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 ```bash
 bash scripts/install.sh             # 一键:vp pack 构建 → 组装 npm 插件包 → dsh plugin 安装到 web profile
 bash scripts/install.sh --pack-only # 只构建并打包,不安装
+DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # 安装到其他 profile(默认 web)
 vp pack          # 仅构建 dist/client/index.cjs 与 dist/host/index.cjs
 vp check         # 语法检查
 ```

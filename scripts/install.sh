@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# 一键构建 + 组装 npm 插件包 + 安装到 DSH web profile
+# 一键构建 + 组装 npm 插件包 + 安装到 DSH profile
 # 用法: bash scripts/install.sh [--pack-only]
+# 目标 profile:默认 web,可用 DSH_PLUGIN_PROFILE=desktop 等覆盖。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.1.8"
+PKG_VER="0.1.9"
+PROFILE="${DSH_PLUGIN_PROFILE:-web}"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
 echo "==> [1/4] vp pack 构建"
@@ -72,10 +74,23 @@ cat > "$BUILD_DIR/package.json" <<EOF
   "files": ["lib", "cordis.patch.yml", "README.md", "README_EN.md"],
   "license": "MIT",
   "keywords": ["dsh", "deepseek-harness", "plugin", "theme", "themes", "color", "palette", "appearance"],
+  "engines": { "node": ">=22.3.0" },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.0",
+    "@deepseek-ai/dsh-client-connection": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-theme": "^0.1.5-rc.1"
+  },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
-      "inject": ["@deepseek-ai/dsh-client-runtime"],
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
       "platform": "web"
     }
   }
@@ -97,6 +112,15 @@ dsh plugin --profile web add dsh-themes
 ```
 
 重启 dsh web 后在 **设置 → 主题** 中使用。
+
+## 兼容性
+
+- 需要 DSH `>=0.1.5-rc.1 <0.2.0`(peerDependencies 声明),已在 **0.1.7-rc.2** 上验证
+- Host 半区用 `connection.fetch.register` 注册精确 Fetch 路由 `/api/dsh-themes`,
+  由 DSH 自有的 `/api` 前置路由转发并附带 Host/Origin 信任检查与浏览器会话鉴权
+- **不需要**再在 profile 的 `cordis.patch.yml` 里给 `connection` 行补
+  `inject: [webRuntime, webServer]`(那是 0.1.5 时代绕开
+  `cannot get property "webServer" without inject` 的临时补丁,0.1.9 起可删除)
 
 ## 功能
 
@@ -130,6 +154,16 @@ dsh plugin --profile web add dsh-themes
 
 Restart dsh web, then use it under **Settings → Themes**.
 
+## Compatibility
+
+- Requires DSH `>=0.1.5-rc.1 <0.2.0` (declared via peerDependencies); verified on **0.1.7-rc.2**
+- The Host half registers the exact Fetch route `/api/dsh-themes` through
+  `connection.fetch.register`, so DSH's own `/api` prefix route forwards it with the
+  Host/Origin trust fence and browser-session authentication attached
+- The old workaround — adding `inject: [webRuntime, webServer]` to the `connection`
+  row in the profile's `cordis.patch.yml` to dodge
+  `cannot get property "webServer" without inject` — is **no longer needed** since 0.1.9
+
 ## Features
 
 - Built-in palettes (DSH Default / t3 chat / Grove / Ocean / Ember / Iris) with independent light/dark owners; unspecified sides fall back to the default theme
@@ -147,9 +181,21 @@ bash scripts/install.sh    # build + assemble + install
 ```
 EOF
 
-echo "==> [3/4] npm pack"
-TGZ="$(cd .npm-package && npm pack ./$PKG_NAME --silent | tail -1)"
-TGZ_PATH="$ROOT/.npm-package/$TGZ"
+echo "==> [3/4] 打包 tarball"
+TGZ_PATH="$ROOT/.npm-package/$PKG_NAME-$PKG_VER.tgz"
+rm -f "$TGZ_PATH"
+cd "$BUILD_DIR"
+if command -v pnpm >/dev/null 2>&1; then
+  pnpm pack --pack-destination "$ROOT/.npm-package" >/dev/null
+elif command -v npm >/dev/null 2>&1; then
+  npm pack --silent >/dev/null
+  mv "$BUILD_DIR/$PKG_NAME-$PKG_VER.tgz" "$TGZ_PATH"
+else
+  echo "错误:未找到 pnpm 或 npm,无法打包 tarball" >&2
+  exit 1
+fi
+cd "$ROOT"
+[ -f "$TGZ_PATH" ] || { echo "错误:打包未生成 $TGZ_PATH" >&2; exit 1; }
 echo "    包: $TGZ_PATH"
 
 if [ "${1:-}" = "--pack-only" ]; then
@@ -157,8 +203,8 @@ if [ "${1:-}" = "--pack-only" ]; then
   exit 0
 fi
 
-echo "==> [4/4] dsh plugin 安装到 web profile"
-dsh plugin --profile web add "$TGZ_PATH"
+echo "==> [4/4] dsh plugin 安装到 $PROFILE profile"
+dsh plugin --profile "$PROFILE" add "$TGZ_PATH"
 
 echo ""
-echo "✔ 安装完成!请重启 dsh web(结束当前 dsh web 进程后重新运行)使其挂载。"
+echo "✔ 安装完成!请重启 dsh($PROFILE profile,结束当前进程后重新运行)使其挂载。"

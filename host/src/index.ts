@@ -1,8 +1,8 @@
 // DSH 主题 (dsh-themes) — Host 入口
 // 本文件由 VitePlus(vp pack)打包为 IIFE 并包装成插件函数体。
 // 以 profile bundle(静态插件)方式挂载:Host 侧通过 connection 服务注册
-// package-private RPC channel `/dsh-themes`,供 Client 半区
-// (connection.rpc.call('/dsh-themes', method, args))调用:
+// 精确 Fetch 路由 `/api/dsh-themes`,供 Client 半区
+// (connection.rpc.call('/api', 'dsh-themes', { method, args }))调用:
 //   scan-vscode-themes  扫描本地 VS Code / Cursor 扩展目录中的主题文件
 //   read-theme-file     读取单个主题 JSON 文件(解析 include 继承链)
 //   fetch-theme-url     获取原始主题 JSON URL(宿主全局 fetch,不依赖 shell/web provider)
@@ -337,38 +337,87 @@ export default {
       },
     }
 
-    // ---- 注册 RPC channel:静态插件的 `harness.handle` 等价物 ----
-    // 与 Client 半区 `connection.rpc.call('/dsh-themes', method, args)` 配对;
-    // authority 与 /api 同策略(loopback 或部署配置的 trusted hosts)。
+    // ---- 注册 RPC 路由:静态插件的 `harness.handle` 等价物 ----
     //
-    // connection RPC 的响应信封必须符合 serverResponseSchema 的 rpcResultSchema:
+    // DSH ≥0.1.7-rc.1 的 `connection.rpc.handle(channel, handler)` 把路由注册在
+    // connection 插件自身的 fiber 上
+    // (`register(owner, …)` 的 `owner` 是 connection 服务的 ctx,
+    //   内部执行 `owner.effect(() => owner.webServer.register(route))`),
+    // 消费方插件没有 webServer 注入,调用即抛:
+    //   Error: cannot get property "webServer" without inject
+    // 过去只能靠在 profile 的 cordis.patch.yml 里给 connection 行补
+    // `inject: [webRuntime, webServer]` 绕开(见 web profile 的既有补丁)。
+    //
+    // 官方为这类需求提供了 `connection.fetch.register`(HostConnectionFetch):
+    // 精确 Fetch 路由由 connection 自有的 `/api` 前置路由转发,自带
+    // Host/Origin 信任检查与浏览器会话鉴权(connection.admit),且完全不需要
+    // 消费方注入 webServer。因此不再需要任何 profile 补丁。
+    //
+    // `/api/dsh-themes` 是精确路径,在 createSharedFetchHandler 里先于 `/api`
+    // 的 RPC 拦截器命中,不会与其他插件的 /api 端点冲突。报文沿用 connection
+    // 的 RPC 信封,Client 半区因此继续用官方 rpc.call 调用:
+    //   client-request  { type, rpcId, method, payload }
+    //   server-response { type, rpcId, result: { ok: true, value } | { ok: false, error } }
+    // result 的信封形状必须符合 rpcResultSchema:
     //   { ok: true, value } | { ok: false, error: { code, message, details } }
-    // (zod 会剥掉信封外的未知字段,例如 { ok: true, list } 里的 list 会被丢弃)
-    // 因此这里统一把各方法体返回的 { ok, ...data } / { ok: false, error: string }
+    // (details 必须是对象,Client 的 parseConnectionResponse 会校验)
+    // 因此这里统一把各方法体返回的 { ok, ...data } / { ok: false, error }
     // 转换成官方信封,方法体本身保持不变。
+    const ROUTE_PATH = '/api/dsh-themes'
     const rpcError = (code, message) => ({
       code: String(code),
       message: String(message),
       details: { issues: [] },
     })
-    ctx.connection.rpc.handle('/dsh-themes', async (method, args) => {
+    const jsonResponse = (status, body) => new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    })
+    const rpcResponse = (rpcId, result) => jsonResponse(200, { type: 'server-response', rpcId, result })
+
+    const handleRpc = async (message) => {
+      const rpcId = message && typeof message.rpcId === 'string' ? message.rpcId : null
+      if (rpcId === null) return jsonResponse(400, rpcError('bad-request', 'RPC 报文缺少 rpcId'))
+      const payload = message.payload && typeof message.payload === 'object' ? message.payload : {}
+      const method = typeof payload.method === 'string' ? payload.method : ''
       const handler = handlers[method]
-      if (handler === undefined) return { ok: false, error: rpcError('unknown-method', '未知方法:' + method) }
+      if (handler === undefined) return rpcResponse(rpcId, { ok: false, error: rpcError('unknown-method', '未知方法:' + method) })
       try {
-        const result = await handler(args)
+        const result = await handler(payload.args)
         if (result && result.ok === true) {
           const { ok, ...data } = result
-          return { ok: true, value: data }
+          return rpcResponse(rpcId, { ok: true, value: data })
         }
         // 方法体返回 { ok: false, error: { code, message } }:code 进入信封,Client 按码本地化
         const err = result && result.error
         if (err && typeof err === 'object' && typeof err.code === 'string') {
-          return { ok: false, error: rpcError(err.code, (err && err.message) || err.code) }
+          return rpcResponse(rpcId, { ok: false, error: rpcError(err.code, (err && err.message) || err.code) })
         }
-        return { ok: false, error: rpcError('rpc.failed', (err && err.message) || String(err) || '调用失败') }
+        return rpcResponse(rpcId, { ok: false, error: rpcError('rpc.failed', (err && err.message) || String(err) || '调用失败') })
       } catch (e) {
-        return { ok: false, error: rpcError('rpc.failed', (e && e.message) || String(e)) }
+        return rpcResponse(rpcId, { ok: false, error: rpcError('rpc.failed', (e && e.message) || String(e)) })
       }
-    }, { authority: 'trusted-host' })
+    }
+
+    ctx.effect(() => {
+      // 缺少 fetch 注册表时给出可诊断的错误(而不是 undefined.register 的 TypeError)
+      if (typeof ctx.connection.fetch?.register !== 'function') {
+        throw new Error('dsh-themes 需要 connection.fetch(DSH >=0.1.5-rc.1 的 HostConnectionFetch)')
+      }
+      const dispose = ctx.connection.fetch.register({
+        path: ROUTE_PATH,
+        methods: ['POST'],
+        requestBody: 'buffered',
+        fetch: async (request) => {
+          let message = null
+          try { message = await request.json() } catch { /* 非法 JSON 走下方 400 */ }
+          if (!message || typeof message !== 'object' || message.type !== 'client-request') {
+            return jsonResponse(400, rpcError('bad-request', '非法 RPC 报文'))
+          }
+          return await handleRpc(message)
+        },
+      })
+      return () => { void dispose() }
+    }, 'dsh-themes: /api/dsh-themes route')
   },
 }
