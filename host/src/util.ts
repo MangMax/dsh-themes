@@ -61,13 +61,20 @@ export function makeShell(ctx) {
   // ---- 网络(全局 fetch,与 dsh-market 相同的模式) ----
   const NET_RETRYABLE = /fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|network error|socket hang up|aborted|timeout/i
 
-  async function fetchWithCap(url, maxBytes, binary) {
+  // 超时/重试策略:默认 30s × 3 次(下载 VSIX 这类大文件需要耐心),
+  // 搜索这类「用户在等结果」的请求改用短超时 × 少重试(见 interactiveNet),
+  // 否则 Open VSX 一慢就会卡住 90 秒,界面只能干等。
+  const NET_DEFAULT = { timeoutMs: 30000, attempts: 3, retryDelayMs: 1000 }
+
+  async function fetchWithCap(url, maxBytes, binary, net) {
+    const policy = net || NET_DEFAULT
+    const attempts = Math.max(1, policy.attempts || 1)
     let lastError = null
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
         const res = await fetch(url, {
           redirect: 'follow',
-          signal: AbortSignal.timeout(30000),
+          signal: AbortSignal.timeout(policy.timeoutMs || NET_DEFAULT.timeoutMs),
           headers: { 'accept-encoding': 'gzip, deflate, br' },
         })
         if (!res.ok) {
@@ -112,21 +119,21 @@ export function makeShell(ctx) {
         const status = e && e.status
         const msg = String((e && e.message) || e)
         const retryable = NET_RETRYABLE.test(msg) || status === 429 || status >= 500
-        if (!retryable || attempt >= 2) throw e
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        if (!retryable || attempt >= attempts - 1) throw e
+        await new Promise((resolve) => setTimeout(resolve, policy.retryDelayMs || 1000))
       }
     }
     throw lastError
   }
 
-  /** 拉取文本(≤ maxBytes 字节),网络类错误自动重试 3 次。 */
-  async function curlText(url, maxBytes) {
-    return fetchWithCap(url, maxBytes, false)
+  /** 拉取文本(≤ maxBytes 字节),网络类错误自动重试。 */
+  async function curlText(url, maxBytes, net) {
+    return fetchWithCap(url, maxBytes, false, net)
   }
 
-  /** 拉取二进制(≤ maxBytes 字节),网络类错误自动重试 3 次。 */
-  async function curlBinary(url, maxBytes) {
-    return fetchWithCap(url, maxBytes, true)
+  /** 拉取二进制(≤ maxBytes 字节),网络类错误自动重试。 */
+  async function curlBinary(url, maxBytes, net) {
+    return fetchWithCap(url, maxBytes, true, net)
   }
 
   // ---- 本地文件(节点内置 fs,直接读写宿主文件系统;不经 shell / ctx.fs) ----
@@ -165,16 +172,25 @@ export function makeShell(ctx) {
     try { return fs.existsSync(file) } catch { return false }
   }
 
+  /** 删除文件(best-effort):用于丢弃损坏的 VSIX 缓存后重新下载。 */
+  function removeFile(file) {
+    if (!fs || typeof fs.unlinkSync !== 'function') return false
+    try { fs.unlinkSync(file); return true } catch { return false }
+  }
+
   return {
     homeDir,
     tmpDir,
     joinPath,
     curlText,
     curlBinary,
+    /** 交互式请求(搜索/详情)的超时策略:10s × 1 次,慢就快速失败而不是卡住界面。 */
+    interactiveNet: { timeoutMs: 10000, attempts: 1, retryDelayMs: 0 },
     readFileSyncUtf8,
     readFileBytes,
     writeFileSyncUtf8,
     writeFileBytes,
     existsFile,
+    removeFile,
   }
 }

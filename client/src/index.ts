@@ -14,7 +14,15 @@ import { humanizeName, parseVsCodeTheme, slugify } from './vs-import.js'
 import { STYLES_CSS } from './styles.js'
 import { NAV_ICON_CSS, installNavIconPatch } from './nav-icon.js'
 import { LOCALES } from './locales.js'
+// 主题文件(本地/VSIX/URL/粘贴)统一走宽松 JSONC 解析:VS Code 主题几乎都带
+// `//` 注释与尾随逗号,严格 JSON.parse 会拒绝(东京夜导入失败的直接原因)。
+import { tryParseJson } from '../../shared/jsonc.js'
+// 提示改为 DSH 原生 Toast(设置页底部的内联提示完全在视线之外)。
+import { useToasts, ToastHost } from './toast.js'
+import { IconSearchOutlineRegular } from '@deepseek-ai/dsh-client-ui-primitives'
 export const PLUGIN_NAME = 'dsh-themes'
+/** 搜索输入去抖窗口(对齐 t3code 的 la = 350ms):停止输入后自动搜索。 */
+const SEARCH_DEBOUNCE_MS = 350
 export default {
   apply(ctx) {
     // 等待核心服务就绪后再挂载(而非 apply 时提前 return:静态 kernel 中
@@ -229,13 +237,15 @@ export default {
       store.emit()
     }
 
-    /** 解析单个 VS Code 主题文件为导入条目(不写入库)。 */
-    function buildImportedEntry(text, sourceName) {
-      let raw
-      try { raw = JSON.parse(text) } catch (e) { throw new Error(t('jsonParseFailed') + ':' + ((e && e.message) || String(e))) }
-      const tokens = parseVsCodeTheme(raw)
+    /**
+     * 把已解析的 VS Code 主题对象转成导入条目(不写入库)。
+     * 对象路径是唯一路径:本地 read-theme-file、VSIX install-open-vsx、
+     * URL/粘贴经 tryParseJson 之后都汇到这里,parseVsCodeTheme 本身就接受对象。
+     */
+    function entryFromTheme(theme, sourceName) {
+      const tokens = parseVsCodeTheme(theme)
       let label = ''
-      for (const cand of [raw.displayName, raw.name]) {
+      for (const cand of [theme.displayName, theme.name]) {
         if (typeof cand !== 'string') continue
         const h = humanizeName(cand)
         if (h.length > 0) { label = h; break }
@@ -243,6 +253,21 @@ export default {
       if (!label && sourceName) label = humanizeName(String(sourceName).replace(/\.json$/i, '').replace(/[#?].*$/, ''))
       label = (label || t('vsCodeTheme')).slice(0, 40)
       return { label, appearance: tokens.appearance, light: tokens.light, dark: tokens.dark }
+    }
+
+    /**
+     * 文本 → 主题对象(JSONC:注释 + 尾随逗号)→ 导入条目。
+     * URL 与粘贴路径共用(宿主只回原文,解析在客户端做)。
+     * 失败时抛出本地化的 jsonParseFailed;doImport 会补上底层细节。
+     */
+    function entryFromText(text, sourceName) {
+      const parsed = tryParseJson(text)
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        // tryParseJson 只回报成败(不暴露首个错误字节),此处给出本地化文案;
+        // 主题结构错误(如缺 editor.background)由 parseVsCodeTheme 抛出细节
+        throw new Error(t('jsonParseFailed'))
+      }
+      return entryFromTheme(parsed, sourceName)
     }
 
     /** 生成唯一 id 并写入库。 */
@@ -265,11 +290,14 @@ export default {
     }
 
     /** 明暗变体聚合(参照 t3code variants 模型):同一扩展的所有明色文件聚合为明色槽、暗色文件聚合为暗色槽,一个主题一张卡片。 */
-    function importBatchThemes(results, collection) {
+    function importBatchThemes(items, collection) {
       const entries = []
-      for (const r of results) {
+      for (const item of items) {
         try {
-          entries.push({ ...buildImportedEntry(r.text, r.label), sourceLabel: r.label || '' })
+          // 宿主契约:items 为 [{ theme: CompactVsTheme, label }]
+          const theme = item && item.theme ? item.theme : item
+          const label = (item && item.label) || ''
+          entries.push({ ...entryFromTheme(theme, label), sourceLabel: label })
         } catch { /* 跳过无法解析的文件 */ }
       }
       if (entries.length === 0) throw new Error(t('noImportFiles'))
@@ -292,8 +320,13 @@ export default {
       return t('importedBatch', { name: palette.label, light: lights.length, dark: darks.length })
     }
 
-    function importVsCodeTheme(text, sourceName) {
-      const entry = buildImportedEntry(text, sourceName)
+    /**
+     * 单主题导入(行为与原实现一致:写入库 → 应用 → 返回调色板)。
+     * 入参既可是原文文本(URL/粘贴),也可是已解析的主题对象
+     * (本地 read-theme-file 返回的 CompactVsTheme / VSIX 条目)。
+     */
+    function importVsCodeTheme(input, sourceName) {
+      const entry = typeof input === 'string' ? entryFromText(input, sourceName) : entryFromTheme(input, sourceName)
       const palette = pushImportedPalette({
         label: entry.label,
         imported: true,
@@ -484,12 +517,17 @@ export default {
       const [busy, setBusy] = React.useState('')
       const [url, setUrl] = React.useState('')
       const [pasteText, setPasteText] = React.useState('')
-      const [message, setMessage] = React.useState(null)
+      // 提示统一走 DSH 原生 Toast;不再有页面底部的内联 dsth-msg(用户反馈看不见)
+      const { current: toast, push, drop: dropToast } = useToasts()
       const [searchQuery, setSearchQuery] = React.useState('')
       const [searchResults, setSearchResults] = React.useState(null)
       const [editing, setEditing] = React.useState(null)
       const [editMode, setEditMode] = React.useState('light')
       const editSnapshot = React.useRef(null)
+      // 搜索交互 refs:序号用于丢弃过期响应,计时器用于输入去抖(回车时取消)
+      const searchSeq = React.useRef(0)
+      const searchTimer = React.useRef(null)
+      const runSearchRef = React.useRef(null)
       React.useEffect(() => ctx.on('theme/change', (next) => setSnapshot(next)), [])
       React.useEffect(() => store.subscribe(() => setTick((n) => n + 1)), [])
       // 语言切换/词典注册时重渲染,界面文案即时跟随
@@ -498,68 +536,79 @@ export default {
 
       const runScan = async () => {
         setBusy('scan')
-        setMessage(null)
         try {
           const res = await rpc('scan-vscode-themes', { root: scanRoot })
           if (res && res.ok) {
             const value = res.value || {}
             setScanResults(value.themes || [])
-            if ((value.themes || []).length === 0) setMessage({ kind: 'error', text: t('noThemesFound', { roots: value.roots }) })
+            if ((value.themes || []).length === 0) push(t('noThemesFound', { roots: value.roots }), 'error')
           } else {
-            setMessage({ kind: 'error', text: errorText(res, t('scanFailed')) })
+            push(errorText(res, t('scanFailed')), 'error')
           }
         } catch (e) {
-          setMessage({ kind: 'error', text: t('callFailed') + ': ' + String((e && e.message) || e) })
+          push(t('callFailed') + ': ' + String((e && e.message) || e), 'error')
         }
         setBusy('')
       }
 
       const importLocal = async (entry) => {
         setBusy(entry.path)
-        setMessage(null)
         try {
-          const res = await rpc('read-theme-file', { path: entry.path })
+          // 契约:read-theme-file 现收 { path, uiTheme },回 { theme: CompactVsTheme }
+          const res = await rpc('read-theme-file', { path: entry.path, uiTheme: entry.uiTheme || '' })
           if (res && res.ok) {
-            doImport(res.value.text, entry.label)
+            // 宿主已把清单 uiTheme 烘进 theme.type,直接走对象导入路径
+            doImport(res.value.theme, entry.label)
           } else {
-            setMessage({ kind: 'error', text: errorText(res, t('readFailed')) })
+            push(errorText(res, t('readFailed')), 'error')
           }
         } catch (e) {
-          setMessage({ kind: 'error', text: String((e && e.message) || e) })
+          push(String((e && e.message) || e), 'error')
         }
         setBusy('')
       }
 
       const fetchUrl = async () => {
-        if (!url.trim()) { setMessage({ kind: 'error', text: t('urlRequired') }); return }
+        if (!url.trim()) { push(t('urlRequired'), 'error'); return }
         setBusy('url')
-        setMessage(null)
         try {
           const res = await rpc('fetch-theme-url', { url: url.trim() })
           if (res && res.ok) {
+            // 形状不变:宿主回原文,客户端用 tryParseJson 走 JSONC 路径
             doImport(res.value.text, url.trim().split('/').pop() || 'remote')
             setUrl('')
           } else {
-            setMessage({ kind: 'error', text: errorText(res, t('fetchFailed')) })
+            push(errorText(res, t('fetchFailed')), 'error')
           }
         } catch (e) {
-          setMessage({ kind: 'error', text: String((e && e.message) || e) })
+          push(String((e && e.message) || e), 'error')
         }
         setBusy('')
       }
 
       const pasteImport = () => {
-        if (!pasteText.trim()) { setMessage({ kind: 'error', text: t('pasteRequired') }); return }
+        if (!pasteText.trim()) { push(t('pasteRequired'), 'error'); return }
         doImport(pasteText, t('pastedTheme'))
       }
 
-      const doImport = (text, sourceName) => {
+      /**
+       * 统一单主题导入入口:文本走 JSONC 解析,已解析对象直接走对象路径。
+       * 解析/映射失败给出本地化的 jsonParseFailed + 底层细节。
+       */
+      const doImport = (input, sourceName) => {
+        let palette
         try {
-          const palette = importVsCodeTheme(text, sourceName)
-          setMessage({ kind: 'ok', text: t('importedApplied', { name: palette.label }) })
+          palette = importVsCodeTheme(input, sourceName)
         } catch (e) {
-          setMessage({ kind: 'error', text: t('importFailed') + ': ' + String((e && e.message) || e) })
+          const detail = String((e && e.message) || e)
+          // entryFromText 抛出的文案已带 jsonParseFailed 前缀;其余(主题结构不合法)补上前缀
+          const text = detail.indexOf(t('jsonParseFailed')) === 0
+            ? detail
+            : t('jsonParseFailed') + (detail ? ': ' + detail : '')
+          push(text, 'error')
+          return
         }
+        push(t('importedApplied', { name: palette.label }), 'ok')
       }
 
       // ---- Open VSX 搜索安装 ----
@@ -584,38 +633,82 @@ export default {
 
       const fmtRating = (r, count) => r > 0 ? '★ ' + r.toFixed(1) + (count > 0 ? ' (' + count + ')' : '') : ''
 
-      const runSearch = async () => {
-        if (!searchQuery.trim()) { setMessage({ kind: 'error', text: t('searchRequired') }); return }
+      /**
+       * 搜索:输入去抖 350ms 后自动触发(t3code la = 350),回车立即触发。
+       * 用单调递增序号丢弃过期响应:旧结果不能覆盖新结果,旧请求也不能
+       * 清掉新请求的 busy 状态(RPC 无法 abort,忽略到达即机制)。
+       */
+      const runSearch = async (queryOverride) => {
+        const raw = typeof queryOverride === 'string' ? queryOverride : searchQuery
+        const query = raw.trim()
+        if (!query) { push(t('searchRequired'), 'error'); return }
+        const seq = ++searchSeq.current
         setBusy('search')
-        setMessage(null)
         try {
-          const res = await rpc('search-open-vsx', { query: searchQuery.trim() })
+          const res = await rpc('search-open-vsx', { query })
+          if (seq !== searchSeq.current) return
           if (res && res.ok) {
             const list = (res.value && res.value.list) || []
             setSearchResults(list)
-            // 作者/许可证需详情接口,后台异步补充,不阻塞搜索展示
+            // 作者/许可证/仓库改为**一次**批量详情(原先是 N 次单查往返)
             if (list.length > 0) {
-              Promise.all(list.map((ext) => rpc('open-vsx-detail', { namespace: ext.namespace, name: ext.name }).then((d) => {
-                const detail = d && d.ok ? d.value : null
-                if (detail) {
-                  setSearchResults((prev) => prev.map((e) => e === ext ? { ...e, author: detail.author || e.author, license: detail.license || e.license, url: detail.url || e.url || '', repository: detail.repository || '' } : e))
-                }
-              }).catch(() => {})))
+              rpc('open-vsx-details', { items: list.map((e) => ({ namespace: e.namespace, name: e.name })) })
+                .then((d) => {
+                  if (seq !== searchSeq.current) return
+                  const details = d && d.ok && d.value ? d.value.details : null
+                  if (!details) return
+                  // 缺失的键表示该项详情失败:保持原样,绝不退化成 N 次单查
+                  setSearchResults((prev) => (prev || []).map((e) => {
+                    const detail = details[e.namespace + '.' + e.name]
+                    if (!detail) return e
+                    return {
+                      ...e,
+                      author: detail.author || e.author,
+                      license: detail.license || e.license,
+                      url: detail.url || e.url || '',
+                      repository: detail.repository || '',
+                    }
+                  }))
+                })
+                .catch(() => {})
             }
-            if (list.length === 0) setMessage({ kind: 'error', text: t('noMatches') })
+            if (list.length === 0) push(t('noMatches'), 'error')
           } else {
-            setMessage({ kind: 'error', text: errorText(res, t('searchFailed')) })
+            push(errorText(res, t('searchFailed')), 'error')
           }
         } catch (e) {
-          setMessage({ kind: 'error', text: t('callFailed') + ': ' + String((e && e.message) || e) })
+          if (seq === searchSeq.current) push(t('callFailed') + ': ' + String((e && e.message) || e), 'error')
         }
-        setBusy('')
+        if (seq === searchSeq.current) setBusy('')
+      }
+
+      // 让去抖回调与回车始终调用最新一次渲染的 runSearch(文案/语言/状态都是新的)
+      React.useEffect(() => { runSearchRef.current = runSearch })
+
+      // 输入去抖 350ms(t3code 的 la = 350):停止输入后自动搜索,无需点击按钮
+      React.useEffect(() => {
+        const query = searchQuery.trim()
+        if (!query) return undefined
+        searchTimer.current = setTimeout(() => {
+          searchTimer.current = null
+          if (runSearchRef.current) runSearchRef.current(query)
+        }, SEARCH_DEBOUNCE_MS)
+        return () => {
+          if (searchTimer.current) { clearTimeout(searchTimer.current); searchTimer.current = null }
+        }
+      }, [searchQuery])
+
+      /** 回车立即搜索;输入法组字中的回车用于确认候选词,必须跳过(中文输入关键路径)。 */
+      const onSearchKeyDown = (e) => {
+        if (e.key !== 'Enter') return
+        if ((e.nativeEvent && e.nativeEvent.isComposing) || e.keyCode === 229) return
+        if (searchTimer.current) { clearTimeout(searchTimer.current); searchTimer.current = null }
+        runSearch(searchQuery)
       }
 
       /** 一步导入:下载 VSIX → 解压(带版本缓存)→ 解析全部主题(include 已合并)→ 聚合导入并应用。 */
       const importExt = async (ext) => {
         setBusy('import-' + ext.name)
-        setMessage(null)
         try {
           const res = await rpc('install-open-vsx', {
             namespace: ext.namespace,
@@ -627,24 +720,37 @@ export default {
             const value = res.value || {}
             const themes = value.themes || []
             if (themes.length === 0) {
-              setMessage({ kind: 'error', text: t('noColorThemes', { name: value.extension }) })
+              push(t('noColorThemes', { name: value.extension }), 'error')
             } else {
+              // 契约:themes 为 [{ label, uiTheme, theme: CompactVsTheme }]
               const summary = importBatchThemes(
-                themes.map((th) => ({ text: th.text, label: th.label })),
+                themes.map((th) => ({ theme: th.theme, label: th.label })),
                 { id: 'ovx-' + ext.namespace + '.' + ext.name, label: ext.displayName }
               )
-              setMessage({ kind: 'ok', text: summary })
+              push(summary, 'ok')
             }
           } else {
-            setMessage({ kind: 'error', text: errorText(res, t('importFailed')) })
+            push(errorText(res, t('importFailed')), 'error')
           }
         } catch (e) {
-          setMessage({ kind: 'error', text: String((e && e.message) || e) })
+          push(String((e && e.message) || e), 'error')
         }
         setBusy('')
       }
 
       // ---- 渲染 ----
+
+      /** 忙碌按钮内容:旋转指示器 + 标签(配合 .dsth-btn-busy 的 flex 排版)。 */
+      const busyContent = (busyNow, label) => busyNow
+        ? React.createElement(React.Fragment, null,
+            React.createElement('span', { className: 'dsth-spinner dsth-spinner-sm', 'aria-hidden': true }),
+            label)
+        : label
+
+      /** 搜索状态的无障碍播报文案(可视区隐藏,见 .dsth-sr-only):搜索中 / 找到 N 个。 */
+      const searchStatus = busy === 'search'
+        ? t('searchingStatus')
+        : (searchResults && searchResults.length > 0 ? t('searchFound', { n: searchResults.length }) : '')
 
       const openLink = (url) => {
         if (!url) return
@@ -811,15 +917,22 @@ export default {
                 React.createElement('span', { className: 'dsth-listitem-path' }, entry.path)
               ),
               React.createElement('button', {
-                className: 'dsth-btn',
+                className: 'dsth-btn dsth-btn-busy',
                 disabled: busy === entry.path,
                 onClick: () => importLocal(entry),
-              }, busy === entry.path ? t('importing') : t('import'))
+              }, busyContent(busy === entry.path, busy === entry.path ? t('importing') : t('import')))
             ))
           )
         : null
 
-      if (editing) return renderEditor(editing)
+      if (editing) {
+        // Toast 经 createPortal 挂到 body,放在这里只是为了跟随主题页重渲染;
+        // 位置不影响显示(z-index 1100 恒在最上层)
+        return React.createElement(React.Fragment, null,
+          renderEditor(editing),
+          React.createElement(ToastHost, { current: toast, onDone: dropToast })
+        )
+      }
       return React.createElement('div', { className: 'dsth-page' },
         React.createElement('div', { className: 'dsth-title' }, t('sectionLabel')),
         React.createElement('div', { className: 'dsth-section' },
@@ -840,70 +953,88 @@ export default {
         React.createElement('div', { className: 'dsth-section' },
           React.createElement('div', { className: 'dsth-section-title' }, t('searchTitle')),
           React.createElement('div', { className: 'dsth-row' },
-            React.createElement('input', {
-              className: 'dsth-input',
-              placeholder: t('searchPlaceholder'),
-              value: searchQuery,
-              onChange: (e) => setSearchQuery(e.target.value),
-            }),
-            React.createElement('button', { className: 'dsth-btn', disabled: busy !== '', onClick: runSearch },
-              busy === 'search' ? t('searching') : t('search')
-            )
+            // 输入框行:搜索中把左侧图标换成旋转指示器(.dsth-search-field 内绝对定位)
+            React.createElement('div', { className: 'dsth-search-field' },
+              busy === 'search'
+                ? React.createElement('span', { className: 'dsth-spinner dsth-search-lead', 'aria-hidden': true })
+                : React.createElement(IconSearchOutlineRegular, { size: 14, className: 'dsth-search-glyph' }),
+              React.createElement('input', {
+                className: 'dsth-input dsth-search-input',
+                placeholder: t('searchPlaceholder'),
+                value: searchQuery,
+                onChange: (e) => setSearchQuery(e.target.value),
+                onKeyDown: onSearchKeyDown,
+              })
+            ),
+            React.createElement('button', {
+              className: 'dsth-btn dsth-btn-busy',
+              disabled: busy !== '',
+              onClick: () => runSearch(searchQuery),
+            }, busyContent(busy === 'search', busy === 'search' ? t('searching') : t('search')))
           ),
-          searchResults && searchResults.length > 0
-            ? React.createElement('div', { className: 'dsth-list' },
-                searchResults.map((ext) => {
-                  const detailUrl = ext.url || 'https://open-vsx.org/extension/' + ext.namespace + '/' + ext.name
-                  const meta = [
-                    t('author', { name: ext.author }),
-                    ext.license ? ext.license : '',
-                    'v' + ext.version,
-                    t('downloads', { n: fmtCount(ext.downloadCount) }),
-                    fmtRating(ext.rating, ext.reviewCount),
-                    ext.timestamp ? t('updated', { date: fmtDate(ext.timestamp) }) : '',
-                  ].filter(Boolean).join(' · ')
-                  return React.createElement('div', {
-                    key: ext.namespace + '.' + ext.name,
-                    className: 'dsth-listitem dsth-searchitem',
-                  },
-                    ext.icon
-                      ? React.createElement('img', {
-                          className: 'dsth-ext-icon dsth-ext-click',
-                          src: ext.icon,
-                          alt: '',
-                          title: t('openDetail'),
-                          onClick: () => openLink(detailUrl),
-                          onError: (e) => { e.target.style.display = 'none' },
-                        })
-                      : null,
-                    React.createElement('div', { className: 'dsth-listitem-main' },
-                      React.createElement('span', {
-                        className: 'dsth-listitem-name dsth-ext-click',
-                        title: t('openDetail'),
-                        onClick: () => openLink(detailUrl),
-                      }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
-                      ext.description
-                        ? React.createElement('span', { className: 'dsth-ext-desc' },
-                            ext.description.slice(0, 160) + (ext.description.length > 160 ? '…' : '')
-                          )
-                        : null,
-                      React.createElement('span', { className: 'dsth-listitem-path' }, meta),
-                      React.createElement('div', { className: 'dsth-ext-links' },
-                        React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(detailUrl) }, t('extDetail')),
-                        ext.repository
-                          ? React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(ext.repository) }, t('extHome'))
-                          : null
-                      )
-                    ),
-                  React.createElement('button', {
-                    className: 'dsth-btn',
-                    disabled: busy !== '',
-                    onClick: () => importExt(ext),
-                  }, busy === 'import-' + ext.name ? t('importing') : t('import'))
-                  )
-                })
+          // 状态播报区:始终存在,供读屏在搜索中/有结果时朗读
+          React.createElement('span', { className: 'dsth-sr-only', role: 'status', 'aria-live': 'polite' }, searchStatus),
+          busy === 'search'
+            ? React.createElement('div', { className: 'dsth-searching' },
+                React.createElement('span', { className: 'dsth-spinner', 'aria-hidden': true }),
+                React.createElement('span', null, t('searchingStatus'))
               )
-            : null
+            : (searchResults && searchResults.length > 0
+                ? React.createElement('div', { className: 'dsth-list' },
+                    searchResults.map((ext, index) => {
+                      const detailUrl = ext.url || 'https://open-vsx.org/extension/' + ext.namespace + '/' + ext.name
+                      const meta = [
+                        t('author', { name: ext.author }),
+                        ext.license ? ext.license : '',
+                        'v' + ext.version,
+                        t('downloads', { n: fmtCount(ext.downloadCount) }),
+                        fmtRating(ext.rating, ext.reviewCount),
+                        ext.timestamp ? t('updated', { date: fmtDate(ext.timestamp) }) : '',
+                      ].filter(Boolean).join(' · ')
+                      return React.createElement('div', {
+                        key: ext.namespace + '.' + ext.name,
+                        className: 'dsth-listitem dsth-searchitem dsth-row-in',
+                        // 逐行错开进入动画;上限 200ms,10 行也瞬间到位
+                        style: { animationDelay: Math.min(index, 8) * 25 + 'ms' },
+                      },
+                        ext.icon
+                          ? React.createElement('img', {
+                              className: 'dsth-ext-icon dsth-ext-click',
+                              src: ext.icon,
+                              alt: '',
+                              title: t('openDetail'),
+                              onClick: () => openLink(detailUrl),
+                              onError: (e) => { e.target.style.display = 'none' },
+                            })
+                          : null,
+                        React.createElement('div', { className: 'dsth-listitem-main' },
+                          React.createElement('span', {
+                            className: 'dsth-listitem-name dsth-ext-click',
+                            title: t('openDetail'),
+                            onClick: () => openLink(detailUrl),
+                          }, ext.displayName + ' · ' + ext.namespace + '.' + ext.name),
+                          ext.description
+                            ? React.createElement('span', { className: 'dsth-ext-desc' },
+                                ext.description.slice(0, 160) + (ext.description.length > 160 ? '…' : '')
+                              )
+                            : null,
+                          React.createElement('span', { className: 'dsth-listitem-path' }, meta),
+                          React.createElement('div', { className: 'dsth-ext-links' },
+                            React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(detailUrl) }, t('extDetail')),
+                            ext.repository
+                              ? React.createElement('button', { className: 'dsth-tip-link', onClick: () => openLink(ext.repository) }, t('extHome'))
+                              : null
+                          )
+                        ),
+                      React.createElement('button', {
+                        className: 'dsth-btn dsth-btn-busy',
+                        disabled: busy !== '',
+                        onClick: () => importExt(ext),
+                      }, busyContent(busy === 'import-' + ext.name, busy === 'import-' + ext.name ? t('importing') : t('import')))
+                      )
+                    })
+                  )
+                : null)
         ),
 
         React.createElement('div', { className: 'dsth-section' },
@@ -927,8 +1058,8 @@ export default {
               value: scanRoot,
               onChange: (e) => setScanRoot(e.target.value),
             }),
-            React.createElement('button', { className: 'dsth-btn', disabled: busy === 'scan', onClick: runScan },
-              busy === 'scan' ? t('scanning') : t('scan')
+            React.createElement('button', { className: 'dsth-btn dsth-btn-busy', disabled: busy === 'scan', onClick: runScan },
+              busyContent(busy === 'scan', busy === 'scan' ? t('scanning') : t('scan'))
             )
           ),
           scanList,
@@ -939,8 +1070,8 @@ export default {
               value: url,
               onChange: (e) => setUrl(e.target.value),
             }),
-            React.createElement('button', { className: 'dsth-btn', disabled: busy === 'url', onClick: fetchUrl },
-              busy === 'url' ? t('fetching') : t('fetch')
+            React.createElement('button', { className: 'dsth-btn dsth-btn-busy', disabled: busy === 'url', onClick: fetchUrl },
+              busyContent(busy === 'url', busy === 'url' ? t('fetching') : t('fetch'))
             )
           ),
           React.createElement('textarea', {
@@ -955,11 +1086,12 @@ export default {
           )
         ),
 
-        message ? React.createElement('div', { className: 'dsth-msg dsth-msg-' + message.kind }, message.text) : null,
-
         React.createElement('div', { className: 'dsth-foot' },
           React.createElement('span', { className: 'dsth-note' }, t('footNote'))
-        )
+        ),
+
+        // 成功/失败提示一律走 ToastHost(portal 到 body,恒在最上层)
+        React.createElement(ToastHost, { current: toast, onDone: dropToast })
       )
     }
 

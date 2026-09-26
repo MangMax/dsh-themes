@@ -35,9 +35,6 @@ export const STYLES_CSS =
         '.dsth-tip-link{border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);border-radius:6px;padding:2px 8px;font-size:11px;line-height:16px;cursor:pointer;font:inherit}' +
         '.dsth-tip-link:hover{background:var(--dsw-alias-interactive-bg-hover)}' +
         '.dsth-listitem-path{color:var(--dsw-alias-label-caption);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
-        '.dsth-msg{padding:6px 10px;border-radius:8px;font-size:12px;line-height:18px}' +
-        '.dsth-msg-ok{color:var(--dsw-alias-state-success-primary)}' +
-        '.dsth-msg-error{color:var(--dsw-alias-state-error-primary)}' +
         '.dsth-del{border:none;background:transparent;color:var(--dsw-alias-state-error-primary);cursor:pointer;font-size:11px;line-height:16px;padding:2px 6px;border-radius:6px;flex:none;font:inherit}' +
         '.dsth-del:hover{background:var(--dsw-alias-interactive-bg-hover-danger)}' +
         '.dsth-foot{display:flex;align-items:center;gap:12px;padding-top:6px}' +
@@ -64,4 +61,29 @@ export const STYLES_CSS =
         '.dsth-editlabel{color:var(--dsw-alias-label-primary);font-size:12px;line-height:18px;flex:none;width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
         '.dsth-editval{color:var(--dsw-alias-label-caption);font-size:10px;line-height:14px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--ds-font-family-code)}' +
         '.dsth-editcolor{flex:none;width:28px;height:28px;padding:0;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:none;cursor:pointer}' +
-        '.dsth-edithex{flex:none;width:110px;font-family:var(--ds-font-family-code);font-size:11px}.dsth-edit-name{flex:1;min-width:140px;max-width:280px;font-weight:600}'
+        '.dsth-edithex{flex:none;width:110px;font-family:var(--ds-font-family-code);font-size:11px}.dsth-edit-name{flex:1;min-width:140px;max-width:280px;font-weight:600}' +
+
+        // ---- 加载动画 / 搜索交互 / Toast 图标 ----
+        // 关键帧统一加 dsth- 前缀,避免与 DSH 或其它插件(如 dsh-toast-in/dsh-toast-fade)冲突。
+        '@keyframes dsth-spin{to{transform:rotate(360deg)}}' +
+        '@keyframes dsth-row-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}' +
+        // 旋转指示器:纯 CSS 圆环,颜色全部来自 DSH token
+        '.dsth-spinner{box-sizing:border-box;display:inline-block;flex:none;width:14px;height:14px;border:2px solid var(--dsw-alias-border-l2);border-top-color:var(--dsw-alias-brand-primary);border-radius:50%;animation:dsth-spin .7s linear infinite}' +
+        '.dsth-spinner-sm{width:12px;height:12px;border-width:1.5px}' +
+        // 忙碌按钮:指示器与标签同一行居中(布局与原先的纯文本按钮一致)
+        '.dsth-btn-busy{display:inline-flex;align-items:center;justify-content:center;gap:6px}' +
+        // 搜索输入框:左侧图标/spinner 座位 + 为它留出的内边距
+        '.dsth-search-field{position:relative;display:flex;align-items:center;flex:1;min-width:0}' +
+        '.dsth-search-input{width:100%;padding-left:28px}' +
+        '.dsth-search-glyph{position:absolute;left:9px;top:50%;margin-top:-7px;color:var(--dsw-alias-label-tertiary);pointer-events:none}' +
+        '.dsth-search-lead{position:absolute;left:9px;top:50%;margin-top:-7px;pointer-events:none}' +
+        // 结果区居中加载块(对应 t3code 的 min-h-20 flex items-center justify-center gap-2)
+        '.dsth-searching{display:flex;min-height:80px;align-items:center;justify-content:center;gap:8px;color:var(--dsw-alias-label-secondary);font-size:12px;line-height:18px}' +
+        // 结果行进入:淡入 + 轻微上移(逐行 animationDelay 由行内样式给出)
+        '.dsth-row-in{animation:dsth-row-in 180ms ease both}' +
+        // 无障碍隐藏:aria-live 状态播报用
+        '.dsth-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}' +
+        // 错误 Toast 的图标座位:Toast 内部 .icon 默认是警告色,这里染成错误主色
+        '.dsth-toast-icon-error{color:var(--dsw-alias-state-error-primary)}' +
+        // 降低动效偏好:去掉结果行的位移/淡入;spinner 是进度指示,保留但放慢
+        '@media (prefers-reduced-motion: reduce){.dsth-row-in{animation:none}.dsth-spinner{animation-duration:2.4s}}'
