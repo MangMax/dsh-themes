@@ -153,6 +153,28 @@ jobs:
           } >> "$GITHUB_OUTPUT"
           echo "版本 $PKG_VER | dist-tag $DIST_TAG | 已发布 $ALREADY | Release 已存在 $RELEASE_EXISTS"
 
+      # 可信发布排查用:把 npm 实际会看到的 OIDC 声明打印出来(只打印声明,
+      # 不含任何令牌或密钥本体)。遇到 403「OIDC permission denied for this action」
+      # 时先看这里:job_workflow_ref 必须等于 npm 上 Trusted Publisher 填的
+      # 「Workflow filename」(相对 .github/workflows/ 的文件名),
+      # environment 必须与填写的 Environment 一致(没填就不该出现)。
+      - name: 打印 OIDC 声明(排查可信发布配置)
+        continue-on-error: true
+        run: |
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "缺少 id-token 权限,跳过"
+            exit 0
+          fi
+          RESP="$(curl -sS -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org")"
+          node -e '
+            const v = JSON.parse(process.argv[1]).value
+            if (!v) { console.log("未取得 id-token"); process.exit(0) }
+            const c = JSON.parse(Buffer.from(v.split(".")[1], "base64url").toString())
+            for (const k of ["iss", "aud", "sub", "repository", "repository_owner", "ref", "event_name", "workflow_ref", "job_workflow_ref", "environment"]) {
+              console.log(String(k).padEnd(20), JSON.stringify(c[k]))
+            }
+          ' "$RESP"
+
       - name: 发布到 npm
         if: steps.meta.outputs.already_published != 'true'
         env:
