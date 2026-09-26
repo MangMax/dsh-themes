@@ -18,9 +18,8 @@
 // 注意:本脚本需要网络。冷缓存用例在网络不可用时**硬失败**而不是静默跳过——
 // 「静默跳过」正是当初让冷缓存缺陷溜过去的盲点(见下方冷缓存用例的注释)。
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, statSync, rmSync } from 'node:fs'
-import { createRequire } from 'node:module'
-import { execFileSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
+import { createRequire, register } from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join, resolve as resolvePath } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -104,19 +103,21 @@ async function rpc(method, args) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// 2. 客户端映射半区(纯逻辑,用 rolldown 现场打包后在 node 里跑)
+// 2. 客户端映射半区(纯逻辑)
+//    用 node 自带的类型擦除 + scripts/ts-import-hook.mjs 直接 import .ts,
+//    不再现场调打包器 —— rolldown 只是 tsdown 的传递依赖,pnpm 不保证在每个
+//    平台上都生成它的 .bin 入口(CI/ubuntu 上就 ENOENT,本地 macOS 却有)。
 // ─────────────────────────────────────────────────────────────
-const rolldownBin = join(ROOT, 'node_modules/.bin/rolldown')
 const work = join(tmpdir(), 'dsh-themes-e2e')
 rmSync(work, { recursive: true, force: true })
 mkdirSync(work, { recursive: true })
 let parseVsCodeTheme = null
 try {
-  execFileSync(rolldownBin, ['client/src/vs-import.ts', '-o', join(work, 'vs-import.mjs'), '-f', 'esm', '-p', 'neutral'], { cwd: ROOT, stdio: 'pipe' })
-  parseVsCodeTheme = (await import('file://' + join(work, 'vs-import.mjs'))).parseVsCodeTheme
-  ok('客户端映射模块打包成功')
+  register('./scripts/ts-import-hook.mjs', pathToFileURL(ROOT + '/'))
+  parseVsCodeTheme = (await import('file://' + join(ROOT, 'client/src/vs-import.ts'))).parseVsCodeTheme
+  ok('客户端映射模块加载成功(直接 import .ts)')
 } catch (e) {
-  bad('客户端映射模块打包失败', String(e && e.message ? e.message : e).slice(0, 200))
+  bad('客户端映射模块加载失败', String(e && e.message ? e.message : e).slice(0, 200))
 }
 
 // ─────────────────────────────────────────────────────────────
