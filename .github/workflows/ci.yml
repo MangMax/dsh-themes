@@ -1,0 +1,64 @@
+# PR / push 门禁:只验证,不发布。
+#
+# 跑的是和发版完全相同的 `pnpm verify`(构建 + 源码检查 + 产物检查 + 真实 VSIX 端到端),
+# 目的是让「不可构建 / 测试不过 / 产物形状坏了」的改动静止在 PR 阶段,而不是
+# 等发版时才发现。
+#
+# 注意:端到端用例需要访问 open-vsx.org(下载真实 VSIX 跑导入链路),
+# 因此网络抖动会让 CI 变红。如果这太吵,把 "构建 + 完整门禁" 那步换成
+# `pnpm build && pnpm check && pnpm test:bundles`(去掉联网的 test:e2e),
+# 或给该步加 continue-on-error —— 但发版工作流应保留联网校验。
+#
+# 权限只要读:这里不发布任何东西,也不需要 OIDC。
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 同一分支/PR 的旧运行直接取消,省 Actions 额度
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    # 端到端要联网,给个上限免得卡住空烧额度
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 不写 version:pnpm 版本读 package.json 的 packageManager(单一来源)
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: 构建 + 完整门禁
+        run: pnpm verify
+
+      - name: 构建产物尺寸(便于发现体积异常增长)
+        if: always()
+        run: |
+          if [ -f dist/client/index.cjs ] && [ -f dist/host/index.cjs ]; then
+            ls -l dist/client/index.cjs dist/host/index.cjs
+            echo "client gzip: $(gzip -c dist/client/index.cjs | wc -c) bytes"
+            echo "host   gzip: $(gzip -c dist/host/index.cjs | wc -c) bytes"
+          else
+            echo "dist 不存在(构建步骤未成功)"
+          fi
