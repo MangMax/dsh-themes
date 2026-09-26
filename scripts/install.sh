@@ -8,13 +8,31 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.2.0"
+# 版本单一来源:从 package.json 读取。此前这里硬编码,和 package.json 会漂移;
+# 自动发版时 tag / package.json / 组装出的包三者版本必须完全一致。
+PKG_VER="$(node -p "require('./package.json').version")"
+if [ -z "$PKG_VER" ]; then
+  echo "错误:无法从 package.json 读取 version" >&2
+  exit 1
+fi
 PROFILE="${DSH_PLUGIN_PROFILE:-web}"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
-echo "==> [1/4] vp pack 构建"
+# vp(vite-plus)解析:优先用本地 devDependency。CI 里没有全局 vp,
+# 干净的开发环境也不该依赖全局安装,所以只认 ./node_modules/.bin/vp,
+# 退而求其次才用 PATH 上的 vp。
+if [ -x "$ROOT/node_modules/.bin/vp" ]; then
+  VP="$ROOT/node_modules/.bin/vp"
+elif command -v vp >/dev/null 2>&1; then
+  VP="vp"
+else
+  echo "错误:未找到 vp(vite-plus)。请先在项目根目录运行 pnpm install(devDependencies 已声明 vite-plus)" >&2
+  exit 1
+fi
+
+echo "==> [1/4] vp pack 构建($VP)"
 rm -rf dist
-vp pack
+"$VP" pack
 
 echo "==> [2/4] 组装插件包 $PKG_NAME@$PKG_VER"
 rm -rf .npm-package
@@ -73,6 +91,10 @@ cat > "$BUILD_DIR/package.json" <<EOF
   },
   "files": ["lib", "cordis.patch.yml", "README.md", "README_EN.md"],
   "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/MangMax/dsh-themes.git" },
+  "homepage": "https://github.com/MangMax/dsh-themes#readme",
+  "bugs": { "url": "https://github.com/MangMax/dsh-themes/issues" },
+  "publishConfig": { "access": "public" },
   "keywords": ["dsh", "deepseek-harness", "plugin", "theme", "themes", "color", "palette", "appearance"],
   "engines": { "node": ">=22.3.0" },
   "peerDependencies": {

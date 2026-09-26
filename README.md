@@ -79,16 +79,24 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 源码为 **TypeScript 模块**,由 **VitePlus(`vp`)打包**为 DSH 插件函数体(`vite.config.ts` 的 `pack` 块负责构建)。
 
 ```bash
-bash scripts/install.sh             # 一键:vp pack 构建 → 组装 npm 插件包 → dsh plugin 安装到 web profile
-bash scripts/install.sh --pack-only # 只构建并打包,不安装
+pnpm install             # 安装依赖(vite-plus 已声明为 devDependency,构建不再依赖全局 vp)
+pnpm build               # vp pack → dist/client/index.cjs 与 dist/host/index.cjs
+pnpm verify              # ★ 完整门禁 = build + check + test(CI 与发版用这个)
+
+pnpm check               # 源码级:颜色白名单覆盖 + 中英文字典对齐(无需构建)
+pnpm test                # 产物级:产物形状 + 真实 VSIX 端到端(需先 build)
+
+bash scripts/install.sh              # 一键:构建 → 组装 npm 包 → 安装到 DSH profile
+bash scripts/install.sh --pack-only  # 只构建并打包,不安装(CI 发版用)
 DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # 安装到其他 profile(默认 web)
-vp pack                  # 仅构建 dist/client/index.cjs 与 dist/host/index.cjs
-pnpm test                # 回归:check-vs-keys.mjs + e2e-import.mjs
 ```
 
-> 构建依赖 `vite-plus` 的 `vp` 命令(全局或任意 `node_modules` 里的 `vp` 均可)。
+> `scripts/install.sh` 优先用 `./node_modules/.bin/vp`(CI 里没有全局 `vp`),版本从
+> `package.json` 读取,不再有两处版本号。
 > 注意 `vp` 的原生插件在部分 Electron 自带 node 下会因签名 Team ID 不匹配而无法加载,
-> 换用系统 / nvm 的 node 即可(例如 `PATH=/Users/<you>/.nvm/versions/node/vXX/bin:$PATH vp pack`)。
+> 本地开发换用系统 / nvm 的 node 即可(例如 `PATH=$HOME/.nvm/versions/node/vXX/bin:$PATH vp pack`)。
+> 本项目固定在 `vite-plus` 0.2.x:0.3.x 要求把 `vite` 别名对齐到
+> `@voidzero-dev/vite-plus-core`(`vp migrate`),升级前请先跑通 `pnpm verify`。
 
 ### 结构
 
@@ -113,6 +121,23 @@ scripts/
   e2e-import.mjs   #   端到端导入回归(真实 Tokyo Night VSIX)
   check-vs-keys.mjs#   颜色白名单覆盖守卫
 ```
+
+## 发版(自动发布 npm)
+
+推 tag / 发 Release 即自动发布到 npm,由 [`.github/workflows/release.yml`](.github/workflows/release.yml) 执行:
+
+1. 改 `package.json` 的 `version`(唯一版本来源),提交到 `main`
+2. 在 GitHub 上 **Draft a new release** → 新建 tag `v0.2.0`(必须与 `package.json` 版本一致,否则工作流会直接失败)→ Publish release
+3. 工作流自动:校验 tag/版本 → `pnpm verify` 完整门禁 → 组装 npm 包 → `npm publish`(带 provenance)→ 把 `.tgz` 附到 Release 上
+
+`dsh plugin add <Release 里 .tgz 的链接>` 即可直接安装该版本。
+
+**认证只需配一次(二选一,工作流两种情况都支持):**
+
+- **A. npm 可信发布(OIDC,推荐,无需任何 secret)**:npmjs.com → 包 `dsh-themes` → Settings → Trusted Publisher → GitHub Actions,填 `MangMax` / `dsh-themes` / `release.yml`,Environment 留空。之后自动带 provenance 签名。
+- **B. `NPM_TOKEN`**:仓库 Settings → Secrets and variables → Actions 新建 `NPM_TOKEN`,值用 **Granular Access Token**(Read and write + 勾选 Bypass 2FA)。配了就优先用它。
+
+预发布版本(版本号带 `-`,或 Release 勾了 *prerelease*)会发到 npm 的 `next` tag,不会顶掉 `latest`。
 
 ## 安装
 

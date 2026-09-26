@@ -86,17 +86,25 @@ extension — it was this plugin's parser:
 Source is modular **TypeScript** bundled by **VitePlus (`vp`)** into DSH plugin function bodies (see the `pack` block in `vite.config.ts`).
 
 ```bash
-bash scripts/install.sh              # one-click: vp pack → assemble npm plugin package → dsh plugin install to web profile
-bash scripts/install.sh --pack-only  # build & pack only, no install
+pnpm install             # deps (vite-plus is declared as a devDependency — no global vp needed)
+pnpm build               # vp pack → dist/client/index.cjs & dist/host/index.cjs
+pnpm verify              # ★ full gate = build + check + test (what CI and releases run)
+
+pnpm check               # source-level: color-whitelist coverage + locale dictionary parity (no build)
+pnpm test                # artifact-level: bundle shape + real-VSIX end-to-end (build first)
+
+bash scripts/install.sh              # one-click: build → assemble npm package → install into a DSH profile
+bash scripts/install.sh --pack-only  # build & pack only, no install (used by CI releases)
 DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # install into another profile (default: web)
-vp pack                              # build only (dist/client/index.cjs & dist/host/index.cjs)
-pnpm test                            # regression: check-vs-keys.mjs + e2e-import.mjs
 ```
 
-> The build needs `vite-plus`'s `vp` command (a global one, or any `node_modules/.bin/vp`).
+> `scripts/install.sh` prefers `./node_modules/.bin/vp` (CI has no global `vp`) and reads the version
+> from `package.json`, so there is no second version to keep in sync.
 > Note: `vp`'s native addon fails to load under some Electron-bundled node builds with a code-signature
-> Team ID mismatch — use your system / nvm node instead
-> (e.g. `PATH=/Users/<you>/.nvm/versions/node/vXX/bin:$PATH vp pack`).
+> Team ID mismatch — use your system / nvm node locally
+> (e.g. `PATH=$HOME/.nvm/versions/node/vXX/bin:$PATH vp pack`).
+> This project is pinned to `vite-plus` 0.2.x: 0.3.x requires aliasing `vite` to
+> `@voidzero-dev/vite-plus-core` (`vp migrate`) — run `pnpm verify` before upgrading.
 
 ### Structure
 
@@ -121,6 +129,31 @@ scripts/
   e2e-import.mjs   #   end-to-end import regression (real Tokyo Night VSIX)
   check-vs-keys.mjs#   color-whitelist coverage guard
 ```
+
+## Releasing (automatic npm publish)
+
+Pushing a tag / publishing a Release publishes to npm, driven by
+[`.github/workflows/release.yml`](.github/workflows/release.yml):
+
+1. Bump `version` in `package.json` (the single source of truth) and commit it to `main`
+2. On GitHub, **Draft a new release** → create tag `v0.2.0` (it must match the `package.json`
+   version or the workflow fails fast) → Publish release
+3. The workflow then: validates tag/version → runs the full `pnpm verify` gate → assembles the npm
+   package → `npm publish` (with provenance) → attaches the `.tgz` to the Release
+
+`dsh plugin add <the .tgz URL from the Release>` installs exactly that version.
+
+**Authentication is a one-time setup (either works; the workflow supports both):**
+
+- **A. npm Trusted Publishing (OIDC — recommended, no secret at all):** on npmjs.com → package
+  `dsh-themes` → Settings → Trusted Publisher → GitHub Actions, with `MangMax` / `dsh-themes` /
+  `release.yml` and an empty Environment. Provenance is then signed automatically.
+- **B. `NPM_TOKEN`:** add a repo secret named `NPM_TOKEN` (Settings → Secrets and variables →
+  Actions) whose value is a **Granular Access Token** (Read and write, with *Bypass 2FA* enabled).
+  When present it takes precedence.
+
+A prerelease (version containing `-`, or a Release marked *prerelease*) is published under npm's
+`next` dist-tag so it never replaces `latest`.
 
 ## Install
 

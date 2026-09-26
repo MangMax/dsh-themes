@@ -1,0 +1,155 @@
+# 发版即自动发布 npm。
+#
+# 触发:在 GitHub 上**发布 Release**(release: published),或手动 workflow_dispatch。
+# 流程:checkout → pnpm install → 校验 tag 与 package.json 版本一致 → 构建 + 完整门禁
+#       → 组装 npm 包(scripts/install.sh --pack-only)→ 校验产物版本 → npm publish
+#       → 把 .tgz 附到 Release 上(方便 dsh plugin add <url> 直接装)
+#
+# ── npm 认证:二选一,本文件无需改动 ────────────────────────────────
+# A) npm 可信发布(OIDC,**推荐**,不需要任何 secret,自动带 provenance)
+#    在 npmjs.com 上一次性配置:进入包 dsh-themes →
+#    Settings → Trusted Publisher → GitHub Actions,填:
+#        Organization or user : MangMax
+#        Repository           : dsh-themes
+#        Workflow filename    : release.yml   ← 必须与本文件名一致
+#        Environment          : (留空)
+#    之后就不用再管 token 了。
+# B) NPM_TOKEN secret:仓库 Settings → Secrets and variables → Actions 新建 secret
+#    `NPM_TOKEN`,值是用 **Granular Access Token**(Read and write,
+#    勾选 "Bypass 2FA")。配了就优先用它,没配则自动走 OIDC。
+#
+# 说明:preflight 用的是 pnpm verify(构建 + 源码检查 + 产物检查 + 真实 VSIX 端到端),
+# 其中端到端用例需要访问 open-vsx.org。网络抖动会让发版失败 —— 这是有意的:
+# 宁可失败也不发布没验证过的产物。
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: '要发布的 tag(如 v0.2.0);留空则用当前 ref'
+        required: false
+        type: string
+
+# id-token:write 是 OIDC 可信发布 / provenance 必需的;contents:write 用于把 .tgz 附到 Release
+permissions:
+  contents: write
+  id-token: write
+
+# 同一个 tag 不允许两个发布并发(避免重复 publish 撞版本)
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.event.release.tag_name || github.ref }}
+
+      # 不写 version:pnpm 版本直接读 package.json 的 packageManager(单一来源)
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # tag 和 package.json 版本必须一致,否则 npm 上会出现「打了 v0.3.0 的 tag,
+      # 发布出去还是 0.2.0」这种对不上的版本。发版前先把 package.json 改好并提交。
+      - name: 校验 tag 与 package.json 版本一致
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: |
+          set -euo pipefail
+          PKG_VER="$(node -p "require('./package.json').version")"
+          echo "package.json version: $PKG_VER"
+          if [ -z "${RELEASE_TAG:-}" ]; then
+            echo "workflow_dispatch 未指定 tag,跳过一致性校验"
+            exit 0
+          fi
+          TAG_VER="${RELEASE_TAG#v}"
+          if [ "$TAG_VER" != "$PKG_VER" ]; then
+            echo "::error::tag '$RELEASE_TAG' 与 package.json 版本 '$PKG_VER' 不一致 —— 请先把 package.json 的 version 改成 $TAG_VER 并提交,再重新发版"
+            exit 1
+          fi
+          echo "tag 与 package.json 版本一致: $TAG_VER"
+
+      - name: 构建 + 完整门禁
+        run: pnpm verify
+
+      - name: 组装 npm 包
+        run: bash scripts/install.sh --pack-only
+
+      - name: 校验产物版本并确定 npm dist-tag
+        id: meta
+        run: |
+          set -euo pipefail
+          PKG_VER="$(node -p "require('./package.json').version")"
+          OUT_VER="$(node -p "require('./.npm-package/dsh-themes/package.json').version")"
+          if [ "$PKG_VER" != "$OUT_VER" ]; then
+            echo "::error::组装出的包版本($OUT_VER)与 package.json($PKG_VER)不一致"
+            exit 1
+          fi
+          # 预发布版本(如 0.3.0-rc.1)或标记为 prerelease 的 Release 一律发到 next,
+          # 避免预发布把 npm 的 latest 顶掉,让普通用户装到 rc 版本。
+          if printf '%s' "$PKG_VER" | grep -q -- '-'; then
+            DIST_TAG=next
+          elif [ "${{ github.event.release.prerelease }}" = "true" ]; then
+            DIST_TAG=next
+          else
+            DIST_TAG=latest
+          fi
+          TARBALL="$(ls .npm-package/dsh-themes-*.tgz | head -1)"
+          {
+            echo "dist_tag=$DIST_TAG"
+            echo "package_version=$PKG_VER"
+            echo "tarball=$TARBALL"
+          } >> "$GITHUB_OUTPUT"
+          echo "将发布 dsh-themes@$PKG_VER(dist-tag: $DIST_TAG),附件: $TARBALL"
+
+      - name: 发布到 npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          NPM_VER="$(npm -v)"
+          echo "npm $NPM_VER / node $(node -v)"
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "认证方式:仓库 secret NPM_TOKEN"
+            printf '//registry.npmjs.org/:_authToken=%s\n' "$NPM_TOKEN" > "$RUNNER_TEMP/.npmrc"
+            export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/.npmrc"
+          else
+            echo "认证方式:npm 可信发布(OIDC)"
+            # 可信发布要求 npm >= 11.5.1(Node 24 自带的 npm 满足;显式挡一下,
+            # 免得报出难以理解的认证错误)
+            if [ "$(printf '%s\n' 11.5.1 "$NPM_VER" | sort -V | head -1)" != "11.5.1" ]; then
+              echo "::error::npm $NPM_VER 太旧,不支持可信发布(需要 >= 11.5.1)。请升级 npm,或改用 NPM_TOKEN。"
+              exit 1
+            fi
+          fi
+          npm publish ./.npm-package/dsh-themes \
+            --access public \
+            --provenance \
+            --tag "${{ steps.meta.outputs.dist_tag }}"
+
+      # 把 .tgz 附到 Release:这样 `dsh plugin add <附件URL>` 就能装,
+      # 不必先手动 pack 再传文件。
+      - name: 把 .tgz 附到 Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "${{ steps.meta.outputs.tarball }}" --clobber
