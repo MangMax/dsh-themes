@@ -95,8 +95,12 @@ DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # 安装到其他 profile(�
 > `package.json` 读取,不再有两处版本号。
 > 注意 `vp` 的原生插件在部分 Electron 自带 node 下会因签名 Team ID 不匹配而无法加载,
 > 本地开发换用系统 / nvm 的 node 即可(例如 `PATH=$HOME/.nvm/versions/node/vXX/bin:$PATH vp pack`)。
-> 本项目固定在 `vite-plus` 0.2.x:0.3.x 要求把 `vite` 别名对齐到
-> `@voidzero-dev/vite-plus-core`(`vp migrate`),升级前请先跑通 `pnpm verify`。
+> **`vite` 是别名**:`package.json` 里写的是
+> `"vite": "npm:@voidzero-dev/vite-plus-core@<与 vite-plus 同版本>"`。
+> vite-plus 0.3 起会校验这个别名(否则报
+> `Expected @voidzero-dev/vite-plus-core@x, but found vite@y`),所以**升级 `vite-plus` 必须
+> 把别名一起改成同版本**,改完先跑 `pnpm verify`。
+> 当前:`vite-plus` **1.0.0-rc.0**(内含 vite 8.3.x),要求 Node `^22.19.0 || ^24.11.0 || >=26.0.0`。
 
 ### 结构
 
@@ -124,13 +128,25 @@ scripts/
 
 ## 发版(自动发布 npm)
 
-推 tag / 发 Release 即自动发布到 npm,由 [`.github/workflows/release.yml`](.github/workflows/release.yml) 执行:
+一条命令搞定:改版本 → commit → tag → push,CI 接着跑门禁、发 npm、生成带 changelog 的 Release。
 
-1. 改 `package.json` 的 `version`(唯一版本来源),提交到 `main`
-2. 在 GitHub 上 **Draft a new release** → 新建 tag `v0.2.0`(必须与 `package.json` 版本一致,否则工作流会直接失败)→ Publish release
-3. 工作流自动:校验 tag/版本 → `pnpm verify` 完整门禁 → 组装 npm 包 → `npm publish`(带 provenance)→ 把 `.tgz` 附到 Release 上
+```bash
+pnpm release     # bumpp(antfu):选版本号 → 更新 package.json → commit → tag vX.Y.Z → push
+```
 
-`dsh plugin add <Release 里 .tgz 的链接>` 即可直接安装该版本。
+push tag 后 [`.github/workflows/release.yml`](.github/workflows/release.yml) 自动执行:
+
+| 步骤 | 说明 |
+|---|---|
+| 校验 tag 与 `package.json` 版本 | 不一致直接失败,避免「tag 是 v0.3.0、发出去还是 0.2.0」 |
+| `pnpm verify` | 完整门禁(构建 + 源码检查 + 产物检查 + 真实 VSIX 端到端) |
+| 组装 + `npm publish` | 带 `--provenance` 签名;该版本已存在于 npm 时自动跳过(**幂等**,重跑不会因版本冲突变红) |
+| `changelogithub` 生成 Release | 由 conventional commits / PR 分组生成的变更清单;`.tgz` 一并附到 Release |
+
+之后 `dsh plugin add <Release 里 .tgz 的链接>` 就能装到指定版本。
+
+也可以在 GitHub 上手动 **Draft a new release** 建 tag(旧习惯仍然有效 —— 工作流同时监听
+`release: published`),或手动触发 `workflow_dispatch` 指定 tag 重跑。
 
 **认证只需配一次(二选一,工作流两种情况都支持):**
 

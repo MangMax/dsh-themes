@@ -103,8 +103,12 @@ DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # install into another prof
 > Note: `vp`'s native addon fails to load under some Electron-bundled node builds with a code-signature
 > Team ID mismatch — use your system / nvm node locally
 > (e.g. `PATH=$HOME/.nvm/versions/node/vXX/bin:$PATH vp pack`).
-> This project is pinned to `vite-plus` 0.2.x: 0.3.x requires aliasing `vite` to
-> `@voidzero-dev/vite-plus-core` (`vp migrate`) — run `pnpm verify` before upgrading.
+> **`vite` is an alias**: `package.json` declares
+> `"vite": "npm:@voidzero-dev/vite-plus-core@<same version as vite-plus>"`.
+> vite-plus 0.3+ validates that alias (otherwise it fails with
+> `Expected @voidzero-dev/vite-plus-core@x, but found vite@y`), so **bumping `vite-plus` requires
+> bumping the alias to the same version** — then run `pnpm verify`.
+> Currently: `vite-plus` **1.0.0-rc.0** (bundling vite 8.3.x), Node `^22.19.0 || ^24.11.0 || >=26.0.0`.
 
 ### Structure
 
@@ -132,16 +136,26 @@ scripts/
 
 ## Releasing (automatic npm publish)
 
-Pushing a tag / publishing a Release publishes to npm, driven by
-[`.github/workflows/release.yml`](.github/workflows/release.yml):
+One command: bump → commit → tag → push; CI then gates, publishes to npm and writes a Release
+with a generated changelog.
 
-1. Bump `version` in `package.json` (the single source of truth) and commit it to `main`
-2. On GitHub, **Draft a new release** → create tag `v0.2.0` (it must match the `package.json`
-   version or the workflow fails fast) → Publish release
-3. The workflow then: validates tag/version → runs the full `pnpm verify` gate → assembles the npm
-   package → `npm publish` (with provenance) → attaches the `.tgz` to the Release
+```bash
+pnpm release     # bumpp (antfu): pick a version → update package.json → commit → tag vX.Y.Z → push
+```
 
-`dsh plugin add <the .tgz URL from the Release>` installs exactly that version.
+A pushed tag makes [`.github/workflows/release.yml`](.github/workflows/release.yml) run:
+
+| Step | What it does |
+|---|---|
+| Tag vs `package.json` version | Fails fast when they disagree (no "tagged v0.3.0, published 0.2.0") |
+| `pnpm verify` | The full gate (build + source checks + artifact checks + real-VSIX end-to-end) |
+| Assemble + `npm publish` | Signed with `--provenance`; **idempotent** — skips if that version is already on npm, so re-runs never fail on a version conflict |
+| `changelogithub` | Creates the GitHub Release with a changelog grouped from conventional commits / PRs, and attaches the `.tgz` |
+
+`dsh plugin add <the .tgz URL from the Release>` then installs exactly that version.
+
+You can still **Draft a new release** manually (the workflow also listens for `release: published`),
+or re-run it via `workflow_dispatch` with a tag.
 
 **Authentication is a one-time setup (either works; the workflow supports both):**
 
