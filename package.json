@@ -4,28 +4,42 @@
   "private": true,
   "description": "Appearance & themes plugin for DSH (DeepSeek Harness): built-in palettes, light/dark/system mode, and VS Code theme import.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MangMax/dsh-themes.git"
+  },
+  "homepage": "https://github.com/MangMax/dsh-themes#readme",
+  "bugs": {
+    "url": "https://github.com/MangMax/dsh-themes/issues"
+  },
   "packageManager": "pnpm@11.21.0",
   "devDependencies": {
+    "bumpp": "^12.3.0",
+    "changelogithub": "^15.0.5",
     "fflate": "^0.8.3",
     "jsonc-parser": "^3.3.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "vite": "^6.4.3"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0-rc.0",
+    "vite-plus": "1.0.0-rc.0"
   },
   "scripts": {
     "build": "vp pack",
     "deploy": "vp pack && mkdir -p ~/.dsh/dsh-themes/dist && cp dist/client/index.cjs ~/.dsh/dsh-themes/dist/client.cjs && cp dist/host/index.cjs ~/.dsh/dsh-themes/dist/host.cjs",
-    "check": "node scripts/check-vs-keys.mjs && node scripts/check-locales.mjs && node scripts/check-bundles.mjs",
-    "test": "node scripts/check-vs-keys.mjs && node scripts/check-locales.mjs && node scripts/check-bundles.mjs && node scripts/e2e-import.mjs",
+    "check": "node scripts/check-vs-keys.mjs && node scripts/check-locales.mjs",
+    "test": "node scripts/check-bundles.mjs && node scripts/e2e-import.mjs",
+    "verify": "pnpm build && pnpm check && pnpm test",
     "test:keys": "node scripts/check-vs-keys.mjs",
-    "test:bundles": "node scripts/check-bundles.mjs",
     "test:locales": "node scripts/check-locales.mjs",
-    "test:e2e": "node scripts/e2e-import.mjs"
+    "test:bundles": "node scripts/check-bundles.mjs",
+    "test:e2e": "node scripts/e2e-import.mjs",
+    "release": "bumpp",
+    "changelog": "changelogithub"
   },
   "main": "dist/dsthe-client.js",
   "type": "module",
   "engines": {
-    "node": ">=22.3.0"
+    "node": "^22.19.0 || ^24.11.0 || >=26.0.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.0",
