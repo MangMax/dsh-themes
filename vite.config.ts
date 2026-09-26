@@ -6,6 +6,7 @@ export default defineConfig({
   pack: [
     {
       entry: ['client/src/index.ts'],
+      deps: { neverBundle: ['@deepseek-ai/dsh-client-ui-primitives'] },
       format: 'cjs',
       platform: 'browser',
       target: 'es2020',

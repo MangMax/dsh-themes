@@ -8,7 +8,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 PKG_NAME="dsh-themes"
-PKG_VER="0.1.9"
+PKG_VER="0.2.0"
 PROFILE="${DSH_PLUGIN_PROFILE:-web}"
 BUILD_DIR="$ROOT/.npm-package/$PKG_NAME"
 
@@ -79,6 +79,7 @@ cat > "$BUILD_DIR/package.json" <<EOF
     "@deepseek-ai/cordis": "^4.0.0",
     "@deepseek-ai/dsh-client-connection": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-theme": "^0.1.5-rc.1"
   },
@@ -116,6 +117,7 @@ dsh plugin --profile web add dsh-themes
 ## 兼容性
 
 - 需要 DSH `>=0.1.5-rc.1 <0.2.0`(peerDependencies 声明),已在 **0.1.7-rc.2** 上验证
+- 客户端 Toast 使用 DSH 平台 seed word 模块 `@deepseek-ai/dsh-client-ui-primitives`(无需额外安装)
 - Host 半区用 `connection.fetch.register` 注册精确 Fetch 路由 `/api/dsh-themes`,
   由 DSH 自有的 `/api` 前置路由转发并附带 Host/Origin 信任检查与浏览器会话鉴权
 - **不需要**再在 profile 的 `cordis.patch.yml` 里给 `connection` 行补
@@ -125,7 +127,10 @@ dsh plugin --profile web add dsh-themes
 ## 功能
 
 - 内置调色板(DSH 默认 / t3 chat / Grove / Ocean / Ember / Iris),明/暗独立归属,缺省一侧由默认主题兜底
-- Open VSX 搜索一键导入主题扩展;VS Code 扩展 / URL / 粘贴 JSON 导入
+- Open VSX 搜索一键导入主题扩展(搜索动画 + 缓存);VS Code 扩展 / URL / 粘贴 JSON 导入
+- 主题文件按 **JSONC** 解析(注释 / 尾随逗号 / BOM),并用清单 `uiTheme` 校正明暗变体
+- 导入提速:VSIX 按需解压、颜色白名单压缩载荷(Tokyo Night 三主题实测 117,679 → 4,412 字节)、详情一次批量补齐
+- 成功 / 失败提示使用 DSH 原生 Toast(顶部居中,位于所有面板之上)
 - 颜色详细参数编辑器:明暗切换 + 分组 token 色块与 hex 编辑,即时生效,支持改名与重置
 - 完整覆盖 DSH 设计平台 95 个颜色 token(表面/文字/交互/状态/Markdown/滚动条/浮层等)
 - 主题持久化(`~/.dsh/dsh-themes.json`)
@@ -157,6 +162,7 @@ Restart dsh web, then use it under **Settings → Themes**.
 ## Compatibility
 
 - Requires DSH `>=0.1.5-rc.1 <0.2.0` (declared via peerDependencies); verified on **0.1.7-rc.2**
+- Client toasts use the DSH platform seed-word module `@deepseek-ai/dsh-client-ui-primitives` (nothing extra to install)
 - The Host half registers the exact Fetch route `/api/dsh-themes` through
   `connection.fetch.register`, so DSH's own `/api` prefix route forwards it with the
   Host/Origin trust fence and browser-session authentication attached
@@ -167,7 +173,10 @@ Restart dsh web, then use it under **Settings → Themes**.
 ## Features
 
 - Built-in palettes (DSH Default / t3 chat / Grove / Ocean / Ember / Iris) with independent light/dark owners; unspecified sides fall back to the default theme
-- One-click Open VSX search & import; VS Code extension / URL / paste-JSON import
+- One-click Open VSX search & import (animated search + caching); VS Code extension / URL / paste-JSON import
+- Theme files parsed as **JSONC** (comments / trailing commas / BOM); the manifest `uiTheme` corrects light/dark variants
+- Faster imports: on-demand VSIX unzip, color-whitelisted compact payloads (117,679 → 4,412 bytes on Tokyo Night's three themes), batched detail calls
+- Success/failure notices use DSH's native Toast (top-center, above every panel)
 - Color editor: light/dark tabs, grouped token pickers + hex inputs with instant effect, rename and reset support
 - Full coverage of the DSH design platform's 95 color tokens (surfaces / labels / interactive / status / markdown / scrollbars / overlays, etc.)
 - Persisted theme library (`~/.dsh/dsh-themes.json`)

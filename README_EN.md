@@ -28,6 +28,43 @@ A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light /
 - Therefore the old `inject: [webRuntime, webServer]` addition on the `connection` row in a profile's
   `cordis.patch.yml` is **no longer needed** and can be removed since 0.1.9
 
+## 0.2.0: import fixes & speedups
+
+This release fixes "importing Tokyo Night reports *contributes no color themes*". The cause was **not** the
+extension — it was this plugin's parser:
+
+1. **VS Code themes are JSONC.** All three theme files in `enkia.tokyo-night` contain `//` comments
+   (a whole block of commented-out keys from line 87), while the old host used strict `JSON.parse` — all
+   three failed, the host returned an empty theme list, and the UI wrongly reported "contributes no color
+   themes". Everything now goes through `jsonc-parser`, the same approach
+   [t3code](https://github.com/pingdotgg/t3code) takes
+   (`parse(text, errors, { allowTrailingComma: true })`): comments, trailing commas and a BOM all parse,
+   consistently across the local-scan, URL, paste and VSIX paths.
+2. **The light variant was classified dark.** Tokyo Night Light's theme file says `"type": "dark"` (an
+   upstream typo); only the extension manifest's `uiTheme: "vs"` is right. Following t3code, the manifest
+   `uiTheme` now **overrides** the file's `type`, so the light variant finally lands in the light slot.
+3. **Faster imports:**
+   - **On-demand unzip** — the bulk of a VSIX is readme / changelog / icons / `.itermcolors`, while theme
+     files are always `.json`. `fflate`'s `filter` now inflates only JSON instead of everything.
+   - **Compact payloads** — only the 44 workbench color keys the palette mapper actually reads are kept;
+     `tokenColors` / `semanticTokenColors` are dropped. Measured on Tokyo Night's three themes:
+     **117,679 → 4,412 bytes (-96.25%)** of RPC payload. (Basis of comparison: the summed minified
+     `JSON.stringify` of the three theme files — i.e. what a client would receive without compaction.)
+   - **One batched detail call** — author/license enrichment after a search went from N RPCs to a single
+     `open-vsx-details`.
+   - **Search cache + short timeout** — the same query hits an in-memory 60 s cache; a slow Open VSX fails
+     after 10 s instead of leaving the UI waiting for 90 s.
+4. **Toasts instead of inline text** — success/failure now uses DSH's native `Toast`
+   (the `@deepseek-ai/dsh-client-ui-primitives` seed-word module): top-center, slide-in/fade-out built in,
+   `z-index: 1100` above every panel. No longer rendered at the bottom of the settings page, where nobody
+   could see it.
+5. **Animated search** — 350 ms input debounce, Enter searches immediately (IME composition aware), an
+   inline spinner in the field, a loading state in the results area, and rows that fade in, all honoring
+   `prefers-reduced-motion`.
+6. **Regression tests** — `node scripts/e2e-import.mjs` drives the whole pipeline against the real Tokyo
+   Night VSIX (52 assertions, including the cold-cache download path that was once missed); `node scripts/check-vs-keys.mjs` keeps the color whitelist covering every key
+   the mapper reads.
+
 ## Features
 
 - **Theme card model**: each theme has light/dark variant slots aggregating all variants of that side; imported extensions become one theme card
@@ -35,8 +72,9 @@ A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light /
 - **Variant selector**: blended color-ball list (like t3code's ThemePreviewCircle); selected ball enlarges in a fixed slot, overflow arrows navigate, active variants show a selection outline
 - **Appearance modes**: system / light / dark; light and dark sides can belong to different themes independently
 - **Color editor (second-level page)**: rename, light/dark tabs, grouped token color pickers + hex inputs with instant effect, and "Reset edits"
-- **Open VSX search & install**: one-request search with icon/author/license/rating, description inline on cards, one-click import with versioned cache
-- **VS Code import**: local extension scan, URL fetch, paste JSON; OKLCH-aware engine derives surfaces, workbench-specified values are contrast-gated
+- **Open VSX search & install**: one-request search (60 s TTL cache, 10 s timeout) with icon/author/license/rating, description inline on cards and details batched into one call; debounced input, inline spinner and fade-in results; one-click import downloads, **unzips on demand**, parses (JSONC + `include` merge) and aggregates, with a versioned cache for instant repeats
+- **VS Code import**: local extension scan, URL fetch, paste JSON — all four paths accept **JSONC** (comments / trailing commas / BOM); the manifest `uiTheme` overrides a file's `type` so light variants are no longer misclassified; OKLCH-aware engine derives surfaces, workbench-specified values are contrast-gated
+- **Toast feedback**: success / failure reports use DSH's native `Toast` (top-center, animated, above every panel) instead of inline text at the bottom of the page
 - **Full token coverage**: all 95 color tokens of the DSH design platform (surface layers bg-layer-1~3 / overlays / masks, label layers primary~caption, interactive feedback, buttons, Markdown, status extras, scrollbars, toast/tooltip, sidebar & menu specifics) follow the theme; the "Edit" editor groups them semantically
 - **Settings nav icon**: the "Themes" entry in the settings panel gets a palette icon from the reicon icon set (https://github.com/dqev/reicon)
 - **Bilingual UI**: settings copy follows the DSH language preference (**Settings → General → Language**), switching live; persisted theme-library data stays language-neutral and is localized at render time
@@ -52,25 +90,36 @@ bash scripts/install.sh              # one-click: vp pack → assemble npm plugi
 bash scripts/install.sh --pack-only  # build & pack only, no install
 DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # install into another profile (default: web)
 vp pack                              # build only (dist/client/index.cjs & dist/host/index.cjs)
-vp check                             # syntax check
+pnpm test                            # regression: check-vs-keys.mjs + e2e-import.mjs
 ```
+
+> The build needs `vite-plus`'s `vp` command (a global one, or any `node_modules/.bin/vp`).
+> Note: `vp`'s native addon fails to load under some Electron-bundled node builds with a code-signature
+> Team ID mismatch — use your system / nvm node instead
+> (e.g. `PATH=/Users/<you>/.nvm/versions/node/vXX/bin:$PATH vp pack`).
 
 ### Structure
 
 ```
+shared/            # Used by both halves (bundled into each artifact)
+  jsonc.ts         #   tolerant JSONC parsing (jsonc-parser + trailing commas + BOM)
+  vs-colors.ts     #   VS Code color-key whitelist + compact payload (the only theme shape sent to the client)
 client/src/        # Browser half (settings UI, palette engine)
   color-utils.ts   #   RGB/HSL/WCAG contrast, dual-seed palettes
   oklch.ts         #   OKLCH perceptual engine (import derivation)
   chat.ts          #   t3 chat palette (colors taken from t3.chat as-is)
   vs-import.ts     #   VS Code theme parsing & mapping
+  toast.ts         #   notice queue built on DSH's native Toast
   palette.ts       #   token list, default appearance, built-in themes
-  styles.ts        #   settings page styles
+  styles.ts        #   settings page styles (incl. search/loading animations)
   index.ts         #   entry: state / override layer / settings page / editor / registration
 host/src/          # Node half (RPC)
-  util.ts          #   shell/curl utility factory
+  util.ts          #   cross-platform network/file helpers (configurable timeout & retries)
   index.ts         #   entry: scan / read / search / detail / install / persist
 scripts/
   install.sh       #   one-click build + assemble npm package + install
+  e2e-import.mjs   #   end-to-end import regression (real Tokyo Night VSIX)
+  check-vs-keys.mjs#   color-whitelist coverage guard
 ```
 
 ## Install

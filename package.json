@@ -1,12 +1,13 @@
 {
   "name": "dsh-themes",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "private": true,
   "description": "Appearance & themes plugin for DSH (DeepSeek Harness): built-in palettes, light/dark/system mode, and VS Code theme import.",
   "license": "MIT",
   "packageManager": "pnpm@11.21.0",
   "devDependencies": {
     "fflate": "^0.8.3",
+    "jsonc-parser": "^3.3.1",
     "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
     "vite": "^6.4.3"
@@ -14,7 +15,12 @@
   "scripts": {
     "build": "vp pack",
     "deploy": "vp pack && mkdir -p ~/.dsh/dsh-themes/dist && cp dist/client/index.cjs ~/.dsh/dsh-themes/dist/client.cjs && cp dist/host/index.cjs ~/.dsh/dsh-themes/dist/host.cjs",
-    "check": "node --check client/src/*.ts && node --check host/src/*.ts"
+    "check": "node scripts/check-vs-keys.mjs && node scripts/check-locales.mjs && node scripts/check-bundles.mjs",
+    "test": "node scripts/check-vs-keys.mjs && node scripts/check-locales.mjs && node scripts/check-bundles.mjs && node scripts/e2e-import.mjs",
+    "test:keys": "node scripts/check-vs-keys.mjs",
+    "test:bundles": "node scripts/check-bundles.mjs",
+    "test:locales": "node scripts/check-locales.mjs",
+    "test:e2e": "node scripts/e2e-import.mjs"
   },
   "main": "dist/dsthe-client.js",
   "type": "module",
@@ -25,6 +31,7 @@
     "@deepseek-ai/cordis": "^4.0.0",
     "@deepseek-ai/dsh-client-connection": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-theme": "^0.1.5-rc.1"
   },
