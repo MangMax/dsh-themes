@@ -166,14 +166,19 @@ if (!themeClient) {
   const defined = new Set()
   for (const m of themeClient.matchAll(/(--dsw-[a-z0-9-]+)\s*:/g)) defined.add(m[1])
 
-  // 整个 DSH 运行时里被消费的 token(var(--x) 或 var(--x, fallback))
-  const consumed = new Set()
-  for (const entry of ['dsh-client-ui-theme', 'dsh-client-ui-layout', 'dsh-client-ui-primitives',
+  // 扫描面:DSH 各 UI 包 + 前端产物。CI 上只有 5 个 dsh-client-* 包在场,
+  // 因此这里同时记录「哪些在场」,供下方判断证据是否充分(见 fullSurface)。
+  const SCAN_SURFACE = ['dsh-client-ui-theme', 'dsh-client-ui-layout', 'dsh-client-ui-primitives',
     'dsh-client-ui-conversation', 'dsh-client-ui-chat', 'dsh-client-ui-tool', 'dsh-client-ui-settings',
     'dsh-client-ui-goal', 'dsh-client-ui-trajectory', 'dsh-web-frontend', 'dsh-client-ui-deliverables',
-    'dsh-client-ui-settings-subagent']) {
+    'dsh-client-ui-settings-subagent']
+  const present = SCAN_SURFACE.filter((e) => existsSync(join(dshRoot, '@deepseek-ai', e)))
+  const fullSurface = present.length === SCAN_SURFACE.length
+
+  // 扫描面内被消费的 token(var(--x) 或 var(--x, fallback))
+  const consumed = new Set()
+  for (const entry of present) {
     const base = join(dshRoot, '@deepseek-ai', entry)
-    if (!existsSync(base)) continue
     const walkCss = (dir) => {
       let entries = []
       try { entries = readdirSync(dir, { withFileTypes: true }) } catch { return }
@@ -195,10 +200,27 @@ if (!themeClient) {
   const written = new Set([...defaultPalette.matchAll(/'(--dsw-[a-z0-9-]+)'\s*:/g)].map((m) => m[1]))
   check(written.size > 0, 'DEFAULT_PALETTE 解析出待写入 token', written.size + ' 个')
 
-  // 真正的错误:写了一个 DSH 既不定义、也不消费的 token 名(纯粹的错字/臆造)
+  // 真正的错误:写了一个 DSH 既不定义、也不消费的 token 名(纯粹的错字/臆造)。
+  //
+  // ⚠ 这个判定依赖「扫描面覆盖了整个 DSH」才成立。CI 上只装了 5 个
+  //   dsh-client-* 包(没有 dsh-web-frontend / dsh-client-ui-chat 等),
+  //   此时某些 token 会因为「引用它的那个包没装」而显得没人认识 ——
+  //   那是扫描面不全,不是插件写错。所以扫描面不全时降级为提示,
+  //   只在完整运行时下才硬失败,避免把环境缺包误报成代码缺陷。
+  //   (SCAN_SURFACE / present / fullSurface 已在上方计算。)
   const bogus = [...written].filter((t) => !defined.has(t) && !consumed.has(t))
-  check(bogus.length === 0, '插件写入的 token 名均被 DSH 定义或消费(无臆造名)',
-    bogus.length === 0 ? '' : 'DSH 既不定义也不消费: ' + bogus.join(', '))
+  if (bogus.length === 0) {
+    ok('插件写入的 token 名均被 DSH 定义或消费(无臆造名)')
+  } else if (fullSurface) {
+    bad('插件写入的 token 名均被 DSH 定义或消费(无臆造名)',
+      'DSH 既不定义也不消费: ' + bogus.join(', '))
+  } else {
+    // 扫描面不全:这些名字很可能是被没装的包引用的,不能据此判为缺陷。
+    console.log('      ℹ 扫描面不完整(' + present.length + '/' + SCAN_SURFACE.length + ' 个 UI 包在场),'
+      + '以下 token 在本机扫描面内未被引用,不能据此判定为臆造名:')
+    for (const t of bogus) console.log('      · ' + t)
+    console.log('      → 在完整 DSH 运行时(本机全局 dsh 安装)下此项会硬校验')
+  }
 
   // 正向补位:DSH 消费但从不定义的 token,正好是插件应当在覆盖层提供的
   const suppliedGaps = [...written].filter((t) => !defined.has(t) && consumed.has(t))
