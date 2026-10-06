@@ -17,16 +17,25 @@ A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light /
 
 ## Compatibility
 
-- Requires DSH `>=0.1.5-rc.1 <0.2.0` (declared through `peerDependencies`, which DSH's plugin compatibility gate evaluates)
-- Verified on **0.1.7-rc.2** (current latest) and on 0.1.5-rc.2
-- The Host half no longer uses `connection.rpc.handle`; it registers the exact Fetch route
-  `/api/dsh-themes` through `connection.fetch.register`, so DSH's own `/api` prefix route forwards it
-  with the trusted-host fence and browser-session authentication attached — no consumer-side `webServer`
-  injection required. Since 0.1.7, `connection.rpc.handle` attaches the route to Connection's own fiber
-  (`owner.effect(() => owner.webServer.register(…))`), so a consumer call throws
-  `cannot get property "webServer" without inject`
-- Therefore the old `inject: [webRuntime, webServer]` addition on the `connection` row in a profile's
-  `cordis.patch.yml` is **no longer needed** and can be removed since 0.1.9
+<!-- The list below (up to the blockquote) is the single source of truth for compatibility facts:
+     versions come from package.json's peerDependencies and dshCompat fields.
+     scripts/install.sh generates the packaged README from the same facts and validates this
+     section line by line, so editing it requires editing package.json too — otherwise
+     `bash scripts/install.sh --pack-only` fails. -->
+- Requires DSH `^0.1.5-rc.1 || ^0.2.0-rc.1` (declared through `peerDependencies`, which DSH's plugin compatibility gate evaluates)
+- Verified on **0.2.0-rc.2** (current latest), 0.1.7-rc.2, and 0.1.5-rc.2
+- Full coverage of the **86 semantic tokens** DSH 0.2.0's UI actually consumes (including `--dsw-alias-state-idle-primary`), so no native DSH colors leak through
+- Client toasts use the DSH platform seed-word module `@deepseek-ai/dsh-client-ui-primitives` (nothing extra to install)
+- The Host half registers the exact Fetch route `/api/dsh-themes` through `connection.fetch.register`, so DSH's own `/api` prefix route forwards it with the trusted-host fence and browser-session authentication attached
+- The old `inject: [webRuntime, webServer]` addition on the `connection` row in a profile's `cordis.patch.yml` is **no longer needed** and can be removed since 0.1.9
+- The build-time guard `scripts/check-dsh-compat.mjs` (wired into `pnpm check`) validates the core token set, semantic-token coverage and the `peerDependencies` range so this can't silently drift again
+
+> In detail: the Host half no longer uses `connection.rpc.handle`; it registers the exact Fetch route
+> `/api/dsh-themes` through `connection.fetch.register`, so DSH's own `/api` prefix route forwards it
+> with the trusted-host fence and browser-session authentication attached — no consumer-side `webServer`
+> injection required. Since 0.1.7, `connection.rpc.handle` attaches the route to Connection's own fiber
+> (`owner.effect(() => owner.webServer.register(…))`), so a consumer call throws
+> `cannot get property "webServer" without inject` — which is why the bullet above holds.
 
 ## 0.2.0: import fixes & speedups
 
@@ -65,6 +74,8 @@ extension — it was this plugin's parser:
    Night VSIX (52 assertions, including the cold-cache download path that was once missed); `node scripts/check-vs-keys.mjs` keeps the color whitelist covering every key
    the mapper reads.
 
+<!-- npm-readme:start — the region below is extracted into the packaged npm README by scripts/install.sh (keep repo-development content out of it) -->
+
 ## Features
 
 - **Theme card model**: each theme has light/dark variant slots aggregating all variants of that side; imported extensions become one theme card
@@ -81,6 +92,9 @@ extension — it was this plugin's parser:
 - **Persistence**: theme library saved to `~/.dsh/dsh-themes.json` and restored on restart
 - **Cross-platform (Windows / macOS / Linux)**: networking and local files run entirely inside the host process (global `fetch` + node builtins + `fflate` in-memory unzip) — no dependence on shell commands like curl/mkdir/unzip, so it works under Windows (pwsh) too
 
+<!-- npm-readme:end -->
+<!-- end of the region: everything below is repo development / build / CI / release material and is kept out of the packaged npm README -->
+
 ## Development
 
 Source is modular **TypeScript** bundled by **VitePlus (`vp`)** into DSH plugin function bodies (see the `pack` block in `vite.config.ts`).
@@ -90,7 +104,7 @@ pnpm install             # deps (vite-plus is declared as a devDependency — no
 pnpm build               # vp pack → dist/client/index.cjs & dist/host/index.cjs
 pnpm verify              # ★ full gate = build + check + test (what CI and releases run)
 
-pnpm check               # source-level: color-whitelist coverage + locale dictionary parity (no build)
+pnpm check               # source-level: color-whitelist coverage + locale dictionary parity + DSH compatibility (no build)
 pnpm test                # artifact-level: bundle shape + real-VSIX end-to-end (build first)
 
 bash scripts/install.sh              # one-click: build → assemble npm package → install into a DSH profile
@@ -109,6 +123,13 @@ DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # install into another prof
 > `Expected @voidzero-dev/vite-plus-core@x, but found vite@y`), so **bumping `vite-plus` requires
 > bumping the alias to the same version** — then run `pnpm verify`.
 > Currently: `vite-plus` **1.0.0-rc.0** (bundling vite 8.3.x), Node `^22.19.0 || ^24.11.0 || >=26.0.0`.
+
+> `pnpm check` now also runs the DSH compatibility guard `node scripts/check-dsh-compat.mjs`: it locates
+> the real DSH runtime and validates the core token set, semantic-token coverage and the
+> `peerDependencies` range. Contract drift after an upstream release fails here instead of surfacing as
+> native DSH colors to users. The packaged README's compatibility lines are generated by
+> `scripts/install.sh` from `package.json`'s `peerDependencies` + `dshCompat`, validated line by line
+> against the root README, so the two can no longer be written independently.
 
 ### Structure
 
@@ -132,6 +153,7 @@ scripts/
   install.sh       #   one-click build + assemble npm package + install
   e2e-import.mjs   #   end-to-end import regression (real Tokyo Night VSIX)
   check-vs-keys.mjs#   color-whitelist coverage guard
+  check-dsh-compat.mjs # DSH compatibility guard (core token set / semantic-token coverage / peer range)
 ```
 
 ## Releasing (automatic npm publish)

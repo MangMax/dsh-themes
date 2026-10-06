@@ -18,15 +18,23 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 
 ## 兼容性
 
-- 需要 DSH `>=0.1.5-rc.1 <0.2.0`(通过 `peerDependencies` 声明,DSH 的插件兼容性门禁据此判定)
-- 已在 **0.1.7-rc.2**(当前最新)与 0.1.5-rc.2 上验证
-- Host 半区不再使用 `connection.rpc.handle`,改为 `connection.fetch.register` 注册精确 Fetch 路由
-  `/api/dsh-themes`:该路由由 DSH 自有的 `/api` 前置路由转发,自带 trusted-host 检查与浏览器会话鉴权,
-  且不需要消费方注入 `webServer`。0.1.7 起 `connection.rpc.handle` 会把路由挂到 connection 插件自身的
-  fiber 上(`owner.effect(() => owner.webServer.register(…))`),消费方调用即抛
-  `cannot get property "webServer" without inject`
-- 因此 **不再需要** 在 profile 的 `cordis.patch.yml` 里给 `connection` 行补
-  `inject: [webRuntime, webServer]`(0.1.5 时代的临时绕行补丁,0.1.9 起可删除)
+<!-- 以下到引用块之前的列表是「兼容性事实」的唯一真相来源:
+     版本号来自 package.json 的 peerDependencies 与 dshCompat 字段。
+     scripts/install.sh 组装 npm 包时按同一份事实生成包内 README,并逐行校验本段;
+     改这里就必须同步改 package.json,否则 bash scripts/install.sh --pack-only 会直接失败。 -->
+- 需要 DSH `^0.1.5-rc.1 || ^0.2.0-rc.1`(通过 `peerDependencies` 声明,DSH 的插件兼容性门禁据此判定)
+- 已在 **0.2.0-rc.2**(当前最新)、0.1.7-rc.2、0.1.5-rc.2 上验证
+- 对 DSH 0.2.0 界面实际消费的 **86 个语义 token 全覆盖**(含 `--dsw-alias-state-idle-primary`),不再露出 DSH 原生色
+- 客户端 Toast 使用 DSH 平台 seed word 模块 `@deepseek-ai/dsh-client-ui-primitives`(无需额外安装)
+- Host 半区用 `connection.fetch.register` 注册精确 Fetch 路由 `/api/dsh-themes`,由 DSH 自有的 `/api` 前置路由转发并附带 trusted-host 检查与浏览器会话鉴权
+- **不需要** 再在 profile 的 `cordis.patch.yml` 里给 `connection` 行补 `inject: [webRuntime, webServer]`(0.1.5 时代的临时绕行补丁,0.1.9 起可删除)
+- 构建期守卫 `scripts/check-dsh-compat.mjs`(已接入 `pnpm check`)校验核心 token 集合、UI 语义 token 覆盖率与 `peerDependencies` 区间,防止再次漂移
+
+> 细节:Host 半区不再使用 `connection.rpc.handle`,改为 `connection.fetch.register` 注册精确 Fetch 路由
+> `/api/dsh-themes`:该路由由 DSH 自有的 `/api` 前置路由转发,自带 trusted-host 检查与浏览器会话鉴权,
+> 且不需要消费方注入 `webServer`。0.1.7 起 `connection.rpc.handle` 会把路由挂到 connection 插件自身的
+> fiber 上(`owner.effect(() => owner.webServer.register(…))`),消费方调用即抛
+> `cannot get property "webServer" without inject`,所以上面那条「不需要补 inject」成立。
 
 ## 0.2.0:导入修复与提速
 
@@ -58,6 +66,8 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 6. **集成回归测试**:`node scripts/e2e-import.mjs` 用真实的 Tokyo Night VSIX 跑完整链路
    (52 项断言,含**冷缓存下载**这条曾经漏掉的路径),`node scripts/check-vs-keys.mjs` 保证颜色白名单永远覆盖映射器读取的每个键。
 
+<!-- npm-readme:start — 以下区间会被 scripts/install.sh 抽进 npm 包内 README(不要放仓库开发向内容)-->
+
 ## 功能
 
 - **主题卡片模型**:每个主题含明色/暗色两个变体槽,槽内聚合全部明色/暗色变体可选;导入的扩展聚合为一个主题卡片
@@ -74,6 +84,9 @@ DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明
 - **持久化**:主题库保存到 `~/.dsh/dsh-themes.json`,重启后恢复
 - **跨平台(Windows / macOS / Linux)**:网络与本地文件全部在宿主进程内完成(全局 `fetch` + node 内置模块 + `fflate` 内存解压),不依赖 shell 的 curl/mkdir/unzip 等 Unix 命令,Windows(pwsh)下同样可用
 
+<!-- npm-readme:end -->
+<!-- 标记区间到此为止:以下是仓库开发/构建/CI/发版说明,不进 npm 包 README -->
+
 ## 开发
 
 源码为 **TypeScript 模块**,由 **VitePlus(`vp`)打包**为 DSH 插件函数体(`vite.config.ts` 的 `pack` 块负责构建)。
@@ -83,7 +96,7 @@ pnpm install             # 安装依赖(vite-plus 已声明为 devDependency,构
 pnpm build               # vp pack → dist/client/index.cjs 与 dist/host/index.cjs
 pnpm verify              # ★ 完整门禁 = build + check + test(CI 与发版用这个)
 
-pnpm check               # 源码级:颜色白名单覆盖 + 中英文字典对齐(无需构建)
+pnpm check               # 源码级:颜色白名单覆盖 + 中英文字典对齐 + DSH 兼容性(无需构建)
 pnpm test                # 产物级:产物形状 + 真实 VSIX 端到端(需先 build)
 
 bash scripts/install.sh              # 一键:构建 → 组装 npm 包 → 安装到 DSH profile
@@ -101,6 +114,11 @@ DSH_PLUGIN_PROFILE=desktop bash scripts/install.sh   # 安装到其他 profile(�
 > `Expected @voidzero-dev/vite-plus-core@x, but found vite@y`),所以**升级 `vite-plus` 必须
 > 把别名一起改成同版本**,改完先跑 `pnpm verify`。
 > 当前:`vite-plus` **1.0.0-rc.0**(内含 vite 8.3.x),要求 Node `^22.19.0 || ^24.11.0 || >=26.0.0`。
+
+> `pnpm check` 现在还会跑 DSH 兼容性检查 `node scripts/check-dsh-compat.mjs`:它定位真实 DSH 运行时,
+> 校验核心 token 集合、UI 语义 token 覆盖率与 `peerDependencies` 区间。上游发版造成的契约漂移会在这里
+> 直接失败,而不是等用户看到 DSH 原生色。包内 README 的兼容性行也由 `scripts/install.sh` 按
+> `package.json` 的 `peerDependencies` + `dshCompat` 生成,组装时逐行校验根 README,杜绝两处各写各的。
 
 ### 结构
 
@@ -124,6 +142,7 @@ scripts/
   install.sh       #   一键构建 + 组装 npm 插件包 + 安装
   e2e-import.mjs   #   端到端导入回归(真实 Tokyo Night VSIX)
   check-vs-keys.mjs#   颜色白名单覆盖守卫
+  check-dsh-compat.mjs # DSH 兼容性守卫(核心 token 集合 / UI 语义 token 覆盖率 / peer 区间)
 ```
 
 ## 发版(自动发布 npm)

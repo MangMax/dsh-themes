@@ -181,6 +181,12 @@ export function deriveExtendedTokens(core) {
       const towardText = (amount) => mix(canvas, text, amount)
       const layer3 = dark ? towardText(0.14) : surfaceRaised
       const modulePlatform = towardText(dark ? 0.14 : 0.03)
+      // DSH 0.2.0 语义 token 的派生中间量(链接、深潜标签、Toast 文字、空闲状态点)
+      const toastBg = mix(canvas, text, dark ? 0.2 : 0.85)
+      const link = mix(accent, dark ? WHITE_FG : BLACK_FG, dark ? 0.12 : 0.1)
+      const deepDiving = mix(link, dark ? WHITE_FG : BLACK_FG, dark ? 0.2 : 0.22)
+      const deepDivingShimmer = mix(deepDiving, WHITE_FG, dark ? 0.15 : 0.3)
+      const idleDot = mix(textMuted, canvas, dark ? 0.62 : 0.78)
       return {
         '--dsw-alias-bg-layer-3': hex(layer3),
         '--dsw-alias-bg-module-platform': hex(modulePlatform),
@@ -253,6 +259,34 @@ export function deriveExtendedTokens(core) {
         '--dsw-static-blue-400': hex(mix(accent, WHITE_FG, 0.2)),
         '--dsw-static-blue-450': hex(mix(accent, WHITE_FG, 0.1)),
         '--dsw-static-blue-500': hex(accent),
+        // ---- DSH 0.2.0 语义 token(UI 包 CSS 实际消费;缺失会露出 DSH 原生色) ----
+        // 空闲状态点:文字次级与画布之间的中性灰
+        '--dsw-alias-state-idle-primary': hex(idleDot),
+        // 表面层级 4:浅色更靠近纯白,深色比 layer-3 略抬升
+        '--dsw-alias-bg-layer-4': hex(dark ? mix(canvas, text, 0.09) : mix(canvas, WHITE_FG, 0.92)),
+        // 错误文字(浅色压暗、深色提亮,保证可读)
+        '--dsw-alias-label-error': hex(dark ? mix(error, WHITE_FG, 0.15) : mix(error, BLACK_FG, 0.08)),
+        '--dsw-alias-separator-primary': dark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+        '--dsw-alias-link': hex(link),
+        '--dsw-alias-menu-icon': hex(mix(textMuted, text, 0.3)),
+        '--dsw-alias-switch-thumb': hex(dark ? mix(canvas, text, 0.42) : WHITE_FG),
+        '--dsw-alias-toast-label': hex(readableForeground(toastBg)),
+        '--dsw-alias-menu-group-header-fill': rgbaOf(dark ? mix(canvas, text, 0.14) : mix(canvas, text, 0.03), 0.94),
+        '--dsw-alias-tooltip-key-bg': 'rgba(255, 255, 255, 0.18)',
+        '--dsw-alias-turn-trigger-bg': hex(towardText(dark ? 0.11 : 0.045)),
+        '--dsw-alias-turn-trigger-bg-hover': hex(towardText(dark ? 0.16 : 0.08)),
+        '--dsw-alias-label-shimmer': rgbaOf(text, dark ? 0.45 : 0.3),
+        '--dsw-alias-label-deep-diving': hex(deepDiving),
+        '--dsw-alias-label-deep-diving-shimmer': hex(deepDivingShimmer),
+        // 代码 / 文件 diff 高亮(参照 success / error 派生)
+        '--dsw-alias-code-diff-added': rgbaOf(success, dark ? 0.12 : 0.08),
+        '--dsw-alias-code-diff-deleted': rgbaOf(error, dark ? 0.12 : 0.08),
+        '--dsw-alias-file-diff-added-bg': hex(mix(canvas, success, dark ? 0.14 : 0.12)),
+        '--dsw-alias-file-diff-added-gutter': hex(mix(canvas, success, dark ? 0.1 : 0.08)),
+        '--dsw-alias-file-diff-added-marker': hex(dark ? mix(success, WHITE_FG, 0.15) : mix(success, BLACK_FG, 0.15)),
+        '--dsw-alias-file-diff-deleted-bg': hex(mix(canvas, error, dark ? 0.14 : 0.1)),
+        '--dsw-alias-file-diff-deleted-gutter': hex(mix(canvas, error, dark ? 0.1 : 0.07)),
+        '--dsw-alias-file-diff-deleted-marker': hex(dark ? mix(error, WHITE_FG, 0.12) : mix(error, BLACK_FG, 0.12)),
       }
     }
 

@@ -97,14 +97,7 @@ cat > "$BUILD_DIR/package.json" <<EOF
   "publishConfig": { "access": "public" },
   "keywords": ["dsh", "deepseek-harness", "plugin", "theme", "themes", "color", "palette", "appearance"],
   "engines": { "node": ">=22.3.0" },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.0",
-    "@deepseek-ai/dsh-client-connection": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-theme": "^0.1.5-rc.1"
-  },
+  "peerDependencies": {},
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": {
@@ -120,97 +113,173 @@ cat > "$BUILD_DIR/package.json" <<EOF
 }
 EOF
 
-# 包 README(中文默认 + 英文版)
-cat > "$BUILD_DIR/README.md" <<'EOF'
-# dsh-themes
+# peerDependencies 单一来源:从根 package.json 注入,避免这里硬编码后与根声明漂移
+# (DSH 的兼容性门禁读的正是这一份,漂移会直接导致插件被判 incompatible)。
+node - "$BUILD_DIR/package.json" "$ROOT/package.json" <<'NODE'
+const fs = require('node:fs')
+const [target, source] = process.argv.slice(2)
+const root = JSON.parse(fs.readFileSync(source, 'utf8'))
+const built = JSON.parse(fs.readFileSync(target, 'utf8'))
+built.peerDependencies = root.peerDependencies
+fs.writeFileSync(target, JSON.stringify(built, null, 2) + '\n')
+NODE
 
-[English](README_EN.md) | 中文
+# 包内 README:单一真相来源,不再内联硬编码。
+#   · 版本事实(peer 区间 / 已验证版本 / UI 语义 token 覆盖数)由根 package.json 的
+#     peerDependencies + dshCompat 程序化生成;
+#   · 正文(功能 / 使用 / 卸载)从根 README 的 <!-- npm-readme:start --> … <!-- npm-readme:end -->
+#     标记区间抽取 —— 根 README 装了仓库开发向内容,不能整份拷进 npm 包。
+# 生成前会拿生成的兼容性行逐行核对根 README:根 README 与 package.json 说法不一致
+# 就直接失败,从根上杜绝「根 README 和 npm 包 README 各写各的」。
+node - "$ROOT" "$BUILD_DIR" <<'NODE'
+const fs = require('node:fs')
+const path = require('node:path')
 
-DSH(DeepSeek Harness)外观与主题插件。
+const [root, buildDir] = process.argv.slice(2)
+const die = (msg) => { console.error('错误:' + msg); process.exit(1) }
 
-## 安装
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
+const peers = pkg.peerDependencies || {}
+const compat = pkg.dshCompat || {}
+const peerRange = peers['@deepseek-ai/dsh-client-ui-theme']
+const verified = Array.isArray(compat.verified) ? compat.verified : []
+const latest = compat.latest
+const tokenCount = compat.uiSemanticTokenCount
 
-```bash
-dsh plugin --profile web add dsh-themes
-```
+if (!peerRange) die('根 package.json 缺少 peerDependencies["@deepseek-ai/dsh-client-ui-theme"]')
+if (!latest) die('根 package.json 缺少 dshCompat.latest')
+if (verified.length === 0) die('根 package.json 缺少 dshCompat.verified')
+if (!verified.includes(latest)) die('dshCompat.latest(' + latest + ') 必须出现在 dshCompat.verified 里')
 
-重启 dsh web 后在 **设置 → 主题** 中使用。
+const others = verified.filter((v) => v !== latest)
+const enOthers = others.length === 0 ? ''
+  : others.length === 1 ? others[0]
+    : others.slice(0, -1).join(', ') + ', and ' + others[others.length - 1]
 
-## 兼容性
+// ── 兼容性列表 = 唯一真相来源。根 README 必须逐行包含这些行(见下方校验)。──
+const compatZh = [
+  '- 需要 DSH `' + peerRange + '`(通过 `peerDependencies` 声明,DSH 的插件兼容性门禁据此判定)',
+  '- 已在 **' + latest + '**(当前最新)' + (others.length ? '、' + others.join('、') : '') + ' 上验证',
+  tokenCount ? '- 对 DSH 0.2.0 界面实际消费的 **' + tokenCount + ' 个语义 token 全覆盖**(含 `--dsw-alias-state-idle-primary`),不再露出 DSH 原生色' : null,
+  '- 客户端 Toast 使用 DSH 平台 seed word 模块 `@deepseek-ai/dsh-client-ui-primitives`(无需额外安装)',
+  '- Host 半区用 `connection.fetch.register` 注册精确 Fetch 路由 `/api/dsh-themes`,由 DSH 自有的 `/api` 前置路由转发并附带 trusted-host 检查与浏览器会话鉴权',
+  '- **不需要** 再在 profile 的 `cordis.patch.yml` 里给 `connection` 行补 `inject: [webRuntime, webServer]`(0.1.5 时代的临时绕行补丁,0.1.9 起可删除)',
+  '- 构建期守卫 `scripts/check-dsh-compat.mjs`(已接入 `pnpm check`)校验核心 token 集合、UI 语义 token 覆盖率与 `peerDependencies` 区间,防止再次漂移',
+].filter(Boolean).join('\n')
 
-- 需要 DSH `>=0.1.5-rc.1 <0.2.0`(peerDependencies 声明),已在 **0.1.7-rc.2** 上验证
-- 客户端 Toast 使用 DSH 平台 seed word 模块 `@deepseek-ai/dsh-client-ui-primitives`(无需额外安装)
-- Host 半区用 `connection.fetch.register` 注册精确 Fetch 路由 `/api/dsh-themes`,
-  由 DSH 自有的 `/api` 前置路由转发并附带 Host/Origin 信任检查与浏览器会话鉴权
-- **不需要**再在 profile 的 `cordis.patch.yml` 里给 `connection` 行补
-  `inject: [webRuntime, webServer]`(那是 0.1.5 时代绕开
-  `cannot get property "webServer" without inject` 的临时补丁,0.1.9 起可删除)
+const compatEn = [
+  '- Requires DSH `' + peerRange + '` (declared through `peerDependencies`, which DSH\'s plugin compatibility gate evaluates)',
+  '- Verified on **' + latest + '** (current latest)' + (enOthers ? ', ' + enOthers : ''),
+  tokenCount ? '- Full coverage of the **' + tokenCount + ' semantic tokens** DSH 0.2.0\'s UI actually consumes (including `--dsw-alias-state-idle-primary`), so no native DSH colors leak through' : null,
+  '- Client toasts use the DSH platform seed-word module `@deepseek-ai/dsh-client-ui-primitives` (nothing extra to install)',
+  '- The Host half registers the exact Fetch route `/api/dsh-themes` through `connection.fetch.register`, so DSH\'s own `/api` prefix route forwards it with the trusted-host fence and browser-session authentication attached',
+  '- The old `inject: [webRuntime, webServer]` addition on the `connection` row in a profile\'s `cordis.patch.yml` is **no longer needed** and can be removed since 0.1.9',
+  '- The build-time guard `scripts/check-dsh-compat.mjs` (wired into `pnpm check`) validates the core token set, semantic-token coverage and the `peerDependencies` range so this can\'t silently drift again',
+].filter(Boolean).join('\n')
 
-## 功能
+const MARK_START = '<!-- npm-readme:start'
+const MARK_END = '<!-- npm-readme:end -->'
 
-- 内置调色板(DSH 默认 / t3 chat / Grove / Ocean / Ember / Iris),明/暗独立归属,缺省一侧由默认主题兜底
-- Open VSX 搜索一键导入主题扩展(搜索动画 + 缓存);VS Code 扩展 / URL / 粘贴 JSON 导入
-- 主题文件按 **JSONC** 解析(注释 / 尾随逗号 / BOM),并用清单 `uiTheme` 校正明暗变体
-- 导入提速:VSIX 按需解压、颜色白名单压缩载荷(Tokyo Night 三主题实测 117,679 → 4,412 字节)、详情一次批量补齐
-- 成功 / 失败提示使用 DSH 原生 Toast(顶部居中,位于所有面板之上)
-- 颜色详细参数编辑器:明暗切换 + 分组 token 色块与 hex 编辑,即时生效,支持改名与重置
-- 完整覆盖 DSH 设计平台 95 个颜色 token(表面/文字/交互/状态/Markdown/滚动条/浮层等)
-- 主题持久化(`~/.dsh/dsh-themes.json`)
+/** 抽 <!-- npm-readme:start … --> 与 <!-- npm-readme:end --> 之间的正文。 */
+function regionOf(text, file) {
+  const s = text.indexOf(MARK_START)
+  const e = text.indexOf(MARK_END)
+  if (s < 0 || e < 0 || e < s) die(file + ' 缺少 npm-readme 标记区间(' + MARK_START + ' … ' + MARK_END + ')')
+  const afterStartTag = text.indexOf('-->', s)
+  if (afterStartTag < 0) die(file + ' 的 npm-readme:start 注释没有闭合 -->')
+  return text.slice(afterStartTag + 3, e).replace(/^\s*\n/, '').replace(/\s+$/, '') + '\n'
+}
 
-## 开发
+function renderZh(region) {
+  return [
+    '# dsh-themes',
+    '',
+    '[English](README_EN.md) | 中文',
+    '',
+    'DSH(DeepSeek Harness)运行时的**外观与主题**插件:内置调色板、明 / 暗 / 跟随系统外观模式、Open VSX 搜索安装、VS Code 主题导入,主题库持久化。',
+    '',
+    '## 安装',
+    '',
+    '```bash',
+    'dsh plugin --profile web add dsh-themes',
+    '```',
+    '',
+    '重启 dsh web 后在 **设置 → 主题** 中使用。本地开发也可以用 `bash scripts/install.sh` 一键构建并安装。',
+    '',
+    '## 兼容性',
+    '',
+    compatZh,
+    '',
+    '## 开发',
+    '',
+    '源码:https://github.com/MangMax/dsh-themes',
+    '',
+    '```bash',
+    'bash scripts/install.sh    # 构建 + 组装 + 安装',
+    '```',
+    '',
+    region,
+  ].join('\n')
+}
 
-源码: https://github.com/MangMax/dsh-themes
+function renderEn(region) {
+  return [
+    '# dsh-themes',
+    '',
+    'English | [中文](README.md)',
+    '',
+    'A **look & theme** plugin for DSH (DeepSeek Harness): built-in palettes, light / dark / follow-system appearance modes, Open VSX search & install, VS Code theme import, persisted theme library.',
+    '',
+    '## Install',
+    '',
+    '```bash',
+    'dsh plugin --profile web add dsh-themes',
+    '```',
+    '',
+    'Restart dsh web, then use it under **Settings → Themes**. For local development, `bash scripts/install.sh` builds, assembles and installs in one go.',
+    '',
+    '## Compatibility',
+    '',
+    compatEn,
+    '',
+    '## Development',
+    '',
+    'Source: https://github.com/MangMax/dsh-themes',
+    '',
+    '```bash',
+    'bash scripts/install.sh    # build + assemble + install',
+    '```',
+    '',
+    region,
+  ].join('\n')
+}
 
-```bash
-bash scripts/install.sh    # 构建 + 组装 + 安装
-```
-EOF
+const variants = [
+  { source: 'README.md', target: 'README.md', compat: compatZh, render: renderZh },
+  { source: 'README_EN.md', target: 'README_EN.md', compat: compatEn, render: renderEn },
+]
 
-cat > "$BUILD_DIR/README_EN.md" <<'EOF'
-# dsh-themes
+for (const v of variants) {
+  const srcPath = path.join(root, v.source)
+  if (!fs.existsSync(srcPath)) die('找不到根 ' + v.source)
+  const text = fs.readFileSync(srcPath, 'utf8')
 
-English | [中文](README.md)
+  // 逐行核对:根 README 的兼容性段必须包含生成的每一行(防止两处漂移)。
+  const missing = v.compat.split('\n').filter((line) => line && !text.includes(line))
+  if (missing.length > 0) {
+    console.error('错误:' + v.source + ' 的「兼容性 / Compatibility」段与 package.json(peerDependencies + dshCompat)不一致,缺少:')
+    for (const line of missing) console.error('  期望包含: ' + line)
+    console.error('  → 同步修改 ' + v.source + ' 的兼容性段,或更新 package.json 的 dshCompat,再重新组装')
+    process.exit(1)
+  }
 
-A look & theme plugin for DSH (DeepSeek Harness).
-
-## Install
-
-```bash
-dsh plugin --profile web add dsh-themes
-```
-
-Restart dsh web, then use it under **Settings → Themes**.
-
-## Compatibility
-
-- Requires DSH `>=0.1.5-rc.1 <0.2.0` (declared via peerDependencies); verified on **0.1.7-rc.2**
-- Client toasts use the DSH platform seed-word module `@deepseek-ai/dsh-client-ui-primitives` (nothing extra to install)
-- The Host half registers the exact Fetch route `/api/dsh-themes` through
-  `connection.fetch.register`, so DSH's own `/api` prefix route forwards it with the
-  Host/Origin trust fence and browser-session authentication attached
-- The old workaround — adding `inject: [webRuntime, webServer]` to the `connection`
-  row in the profile's `cordis.patch.yml` to dodge
-  `cannot get property "webServer" without inject` — is **no longer needed** since 0.1.9
-
-## Features
-
-- Built-in palettes (DSH Default / t3 chat / Grove / Ocean / Ember / Iris) with independent light/dark owners; unspecified sides fall back to the default theme
-- One-click Open VSX search & import (animated search + caching); VS Code extension / URL / paste-JSON import
-- Theme files parsed as **JSONC** (comments / trailing commas / BOM); the manifest `uiTheme` corrects light/dark variants
-- Faster imports: on-demand VSIX unzip, color-whitelisted compact payloads (117,679 → 4,412 bytes on Tokyo Night's three themes), batched detail calls
-- Success/failure notices use DSH's native Toast (top-center, above every panel)
-- Color editor: light/dark tabs, grouped token pickers + hex inputs with instant effect, rename and reset support
-- Full coverage of the DSH design platform's 95 color tokens (surfaces / labels / interactive / status / markdown / scrollbars / overlays, etc.)
-- Persisted theme library (`~/.dsh/dsh-themes.json`)
-
-## Development
-
-Source: https://github.com/MangMax/dsh-themes
-
-```bash
-bash scripts/install.sh    # build + assemble + install
-```
-EOF
+  const region = regionOf(text, v.source)
+  fs.writeFileSync(path.join(buildDir, v.target), v.render(region))
+  console.log('    ' + v.target + ' ← ' + v.source + ' 标记区间 + package.json 生成的头部(' + (region.split('\n').length - 1) + ' 行正文)')
+}
+console.log('    peer 区间: ' + peerRange)
+console.log('    已验证: ' + verified.join(', ') + '(最新 ' + latest + ')')
+NODE
 
 echo "==> [3/4] 打包 tarball"
 TGZ_PATH="$ROOT/.npm-package/$PKG_NAME-$PKG_VER.tgz"

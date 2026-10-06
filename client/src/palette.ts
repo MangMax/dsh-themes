@@ -48,6 +48,7 @@ export const EXTENDED_TOKEN_NAMES = [
       // 状态补充
       '--dsw-alias-state-error-secondary', '--dsw-alias-state-warn-label', '--dsw-alias-state-warn-secondary', '--dsw-alias-state-warn-tertiary',
       '--dsw-alias-state-success-secondary', '--dsw-alias-state-success-tertiary',
+      '--dsw-alias-state-idle-primary',
       // 浮层
       '--dsw-alias-toast-bg', '--dsw-alias-tooltip-bg',
       // 专用
@@ -55,6 +56,20 @@ export const EXTENDED_TOKEN_NAMES = [
       '--dsw-specific-tip', '--dsw-specific-sidebar-nav-item-hover',
       // 品牌静态色(被组件直接消费:meter 色调、轨迹强调色)
       '--dsw-static-blue-400', '--dsw-static-blue-450', '--dsw-static-blue-500',
+      // DSH 0.2.0 新增/未覆盖的语义 token(UI 包 CSS 实际消费;缺失会露出 DSH 原生色)
+      // 表面与分隔
+      '--dsw-alias-bg-layer-4', '--dsw-alias-separator-primary',
+      // 文字与链接
+      '--dsw-alias-label-error', '--dsw-alias-label-shimmer',
+      '--dsw-alias-label-deep-diving', '--dsw-alias-label-deep-diving-shimmer', '--dsw-alias-link',
+      // 菜单 / 开关 / 浮层
+      '--dsw-alias-menu-icon', '--dsw-alias-menu-group-header-fill', '--dsw-alias-switch-thumb',
+      '--dsw-alias-toast-label', '--dsw-alias-tooltip-key-bg',
+      '--dsw-alias-turn-trigger-bg', '--dsw-alias-turn-trigger-bg-hover',
+      // 代码/文件 diff 高亮
+      '--dsw-alias-code-diff-added', '--dsw-alias-code-diff-deleted',
+      '--dsw-alias-file-diff-added-bg', '--dsw-alias-file-diff-added-gutter', '--dsw-alias-file-diff-added-marker',
+      '--dsw-alias-file-diff-deleted-bg', '--dsw-alias-file-diff-deleted-gutter', '--dsw-alias-file-diff-deleted-marker',
     ]
 
     /** 完整覆盖清单:核心 + 扩展,供覆盖层应用与持久化补齐。 */
@@ -68,6 +83,7 @@ export const CORE_TOKEN_NAMES = [
       '--dsw-alias-border-l1', '--dsw-alias-border-l2', '--dsw-alias-brand-primary',
       '--dsw-alias-label-primary', '--dsw-alias-label-secondary',
       '--dsw-alias-state-error-primary', '--dsw-alias-state-warn-primary', '--dsw-alias-state-success-primary',
+      '--dsw-alias-state-idle-primary',
       '--dsw-specific-sidebar-fill',
     ]
 
@@ -170,6 +186,30 @@ export const DEFAULT_PALETTE = {
         '--dsw-static-blue-400': '#60a5fa',
         '--dsw-static-blue-450': '#4d93f8',
         '--dsw-static-blue-500': '#3b82f6',
+        // DSH 0.2.0 语义 token 上游真值(浅色)
+        '--dsw-alias-state-idle-primary': '#d4d4d4',
+        '--dsw-alias-bg-layer-4': '#ffffff',
+        '--dsw-alias-label-error': '#ec1313',
+        '--dsw-alias-separator-primary': 'rgba(0, 0, 0, 0.06)',
+        '--dsw-alias-link': '#4176e6',
+        '--dsw-alias-menu-icon': '#4a4a4c',
+        '--dsw-alias-switch-thumb': '#ffffff',
+        '--dsw-alias-toast-label': '#ffffff',
+        '--dsw-alias-menu-group-header-fill': '#f8f9faf0',
+        '--dsw-alias-tooltip-key-bg': 'rgba(255, 255, 255, 0.18)',
+        '--dsw-alias-turn-trigger-bg': '#f4f4f5',
+        '--dsw-alias-turn-trigger-bg-hover': '#ebebec',
+        '--dsw-alias-label-shimmer': 'rgba(0, 0, 0, 0.30)',
+        '--dsw-alias-label-deep-diving': '#2f5fcc',
+        '--dsw-alias-label-deep-diving-shimmer': '#6b93e8',
+        '--dsw-alias-code-diff-added': 'rgba(34, 197, 94, 0.08)',
+        '--dsw-alias-code-diff-deleted': 'rgba(236, 19, 19, 0.08)',
+        '--dsw-alias-file-diff-added-bg': '#e6f4e7',
+        '--dsw-alias-file-diff-added-gutter': '#edf7ed',
+        '--dsw-alias-file-diff-added-marker': '#01a241',
+        '--dsw-alias-file-diff-deleted-bg': '#fce6e2',
+        '--dsw-alias-file-diff-deleted-gutter': '#fdece9',
+        '--dsw-alias-file-diff-deleted-marker': '#ba2723',
       },
       dark: {
         '--dsw-alias-bg-base': '#151517',
@@ -267,6 +307,30 @@ export const DEFAULT_PALETTE = {
         '--dsw-static-blue-400': '#60a5fa',
         '--dsw-static-blue-450': '#4d93f8',
         '--dsw-static-blue-500': '#3b82f6',
+        // DSH 0.2.0 语义 token 上游真值(深色)
+        '--dsw-alias-state-idle-primary': '#545454',
+        '--dsw-alias-bg-layer-4': '#232324',
+        '--dsw-alias-label-error': '#f25a5a',
+        '--dsw-alias-separator-primary': 'rgba(255, 255, 255, 0.08)',
+        '--dsw-alias-link': '#5686fe',
+        '--dsw-alias-menu-icon': '#8f8f91',
+        '--dsw-alias-switch-thumb': '#6b6b6d',
+        '--dsw-alias-toast-label': '#ffffff',
+        '--dsw-alias-menu-group-header-fill': '#303136f0',
+        '--dsw-alias-tooltip-key-bg': 'rgba(255, 255, 255, 0.18)',
+        '--dsw-alias-turn-trigger-bg': '#2c2c2e',
+        '--dsw-alias-turn-trigger-bg-hover': '#333336',
+        '--dsw-alias-label-shimmer': 'rgba(255, 255, 255, 0.45)',
+        '--dsw-alias-label-deep-diving': '#7d9dfa',
+        '--dsw-alias-label-deep-diving-shimmer': '#93b4ff',
+        '--dsw-alias-code-diff-added': 'rgba(34, 197, 94, 0.12)',
+        '--dsw-alias-code-diff-deleted': 'rgba(242, 90, 90, 0.12)',
+        '--dsw-alias-file-diff-added-bg': '#1f3124',
+        '--dsw-alias-file-diff-added-gutter': '#132016',
+        '--dsw-alias-file-diff-added-marker': '#41c977',
+        '--dsw-alias-file-diff-deleted-bg': '#3c1f1b',
+        '--dsw-alias-file-diff-deleted-gutter': '#28130e',
+        '--dsw-alias-file-diff-deleted-marker': '#fa423e',
       },
     }
 
