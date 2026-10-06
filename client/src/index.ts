@@ -376,6 +376,7 @@ export default {
         ['--dsw-alias-state-error-primary', 'tok.error'],
         ['--dsw-alias-state-warn-primary', 'tok.warn'],
         ['--dsw-alias-state-success-primary', 'tok.success'],
+        ['--dsw-alias-state-idle-primary', 'tok.idle'],
         ['--dsw-static-deepseek-450', 'tok.running'],
       ] },
       { id: 'other', titleKey: 'editorGroup.other', tokens: [
@@ -387,6 +388,7 @@ export default {
       ] },
       { id: 'surface', titleKey: 'editorGroup.surface', tokens: [
         ['--dsw-alias-bg-layer-3', 'tok.layer3'],
+        ['--dsw-alias-bg-layer-4', 'tok.layer4'],
         ['--dsw-alias-bg-module-platform', 'tok.modulePlatform'],
         ['--dsw-alias-bg-multi-select', 'tok.multiSelect'],
         ['--dsw-specific-menu', 'tok.menu'],
@@ -403,6 +405,10 @@ export default {
         ['--dsw-alias-label-primary-foreground', 'tok.textOnBrand'],
         ['--dsw-alias-label-primary-inverted', 'tok.textInverted'],
         ['--dsw-alias-label-primary-bluish', 'tok.textBluish'],
+        ['--dsw-alias-label-error', 'tok.errorText'],
+        ['--dsw-alias-label-shimmer', 'tok.shimmer'],
+        ['--dsw-alias-label-deep-diving', 'tok.deepDiving'],
+        ['--dsw-alias-label-deep-diving-shimmer', 'tok.deepDivingShimmer'],
       ] },
       { id: 'interactive', titleKey: 'editorGroup.interactive', tokens: [
         ['--dsw-alias-interactive-bg-hover', 'tok.interactiveHover'],
@@ -431,9 +437,28 @@ export default {
       ] },
       { id: 'chrome', titleKey: 'editorGroup.chrome', tokens: [
         ['--dsw-alias-toast-bg', 'tok.toast'],
+        ['--dsw-alias-toast-label', 'tok.toastLabel'],
         ['--dsw-alias-tooltip-bg', 'tok.tooltip'],
+        ['--dsw-alias-tooltip-key-bg', 'tok.tooltipKey'],
         ['--dsw-alias-scrollbar-bg-l1', 'tok.scrollbarBg'],
         ['--dsw-alias-scrollbar-hover-l1', 'tok.scrollbarHover'],
+        ['--dsw-alias-separator-primary', 'tok.separator'],
+        ['--dsw-alias-link', 'tok.link'],
+        ['--dsw-alias-menu-icon', 'tok.menuIcon'],
+        ['--dsw-alias-menu-group-header-fill', 'tok.menuGroupHeader'],
+        ['--dsw-alias-switch-thumb', 'tok.switchThumb'],
+        ['--dsw-alias-turn-trigger-bg', 'tok.turnTrigger'],
+        ['--dsw-alias-turn-trigger-bg-hover', 'tok.turnTriggerHover'],
+      ] },
+      { id: 'diff', titleKey: 'editorGroup.diff', tokens: [
+        ['--dsw-alias-code-diff-added', 'tok.codeDiffAdded'],
+        ['--dsw-alias-code-diff-deleted', 'tok.codeDiffDeleted'],
+        ['--dsw-alias-file-diff-added-bg', 'tok.fileDiffAddedBg'],
+        ['--dsw-alias-file-diff-added-gutter', 'tok.fileDiffAddedGutter'],
+        ['--dsw-alias-file-diff-added-marker', 'tok.fileDiffAddedMarker'],
+        ['--dsw-alias-file-diff-deleted-bg', 'tok.fileDiffDeletedBg'],
+        ['--dsw-alias-file-diff-deleted-gutter', 'tok.fileDiffDeletedGutter'],
+        ['--dsw-alias-file-diff-deleted-marker', 'tok.fileDiffDeletedMarker'],
       ] },
     ]
 

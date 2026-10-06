@@ -1,6 +1,6 @@
 {
   "name": "dsh-themes",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Appearance & themes plugin for DSH (DeepSeek Harness): built-in palettes, light/dark/system mode, and VS Code theme import.",
   "license": "MIT",
@@ -14,6 +14,11 @@
   },
   "packageManager": "pnpm@11.21.0",
   "devDependencies": {
+    "@deepseek-ai/dsh-client-connection": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-locale": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.2.0-rc.2",
+    "@deepseek-ai/dsh-client-ui-theme": "^0.2.0-rc.2",
     "bumpp": "^12.3.0",
     "changelogithub": "^15.0.5",
     "fflate": "^0.8.3",
@@ -26,13 +31,15 @@
   "scripts": {
     "build": "vp pack",
     "deploy": "vp pack && mkdir -p ~/.dsh/dsh-themes/dist && cp dist/client/index.cjs ~/.dsh/dsh-themes/dist/client.cjs && cp dist/host/index.cjs ~/.dsh/dsh-themes/dist/host.cjs",
-    "check": "node scripts/check-vs-keys.mjs && node scripts/check-locales.mjs",
-    "test": "node scripts/check-bundles.mjs && node scripts/e2e-import.mjs",
+    "check": "node scripts/check-vs-keys.mjs && node scripts/check-locales.mjs && node scripts/check-dsh-compat.mjs",
+    "test": "node scripts/check-bundles.mjs && node scripts/e2e-import.mjs && node scripts/e2e-dsh-runtime.mjs",
     "verify": "pnpm build && pnpm check && pnpm test",
     "test:keys": "node scripts/check-vs-keys.mjs",
     "test:locales": "node scripts/check-locales.mjs",
+    "test:dsh-compat": "node scripts/check-dsh-compat.mjs",
     "test:bundles": "node scripts/check-bundles.mjs",
     "test:e2e": "node scripts/e2e-import.mjs",
+    "test:runtime": "node scripts/e2e-dsh-runtime.mjs",
     "release": "bumpp",
     "changelog": "changelogithub"
   },
@@ -43,11 +50,16 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.0",
-    "@deepseek-ai/dsh-client-connection": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.1",
-    "@deepseek-ai/dsh-client-ui-theme": "^0.1.5-rc.1"
+    "@deepseek-ai/dsh-client-connection": "^0.1.5-rc.1 || ^0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-locale": "^0.1.5-rc.1 || ^0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-primitives": "^0.1.5-rc.1 || ^0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-renderer": "^0.1.5-rc.1 || ^0.2.0-rc.1",
+    "@deepseek-ai/dsh-client-ui-theme": "^0.1.5-rc.1 || ^0.2.0-rc.1"
+  },
+  "dshCompat": {
+    "verified": ["0.2.0-rc.2", "0.1.7-rc.2", "0.1.5-rc.2"],
+    "latest": "0.2.0-rc.2",
+    "uiSemanticTokenCount": 86
   },
   "dsh": {
     "bundle": {
